@@ -1,0 +1,46 @@
+PATHS:
+  DATA_ROOT: /data/dataset/raf_db/basic
+  VIS_PATH: ./sample/plots/RAF
+
+FLOW:
+  N_FLOW: 3
+  N_BLOCK: 8
+  IN_FEAT: 2
+  MLP_DIM: 32
+  TEMP: 0.7
+  N_SAMPLE: 20
+  INIT_ZEROS: False
+
+DATASET:
+  DS_NAME: RAF
+  N_CLASS: 7
+  IMG_SIZE: 64
+  NUM_WORKERS: 6
+  TEST: M0008
+  COUNT: 4000
+  N_VIEWS: 2
+  AUG: True
+  AUG2: False
+  W_SAMPLER: True
+
+TRAINING:
+  ITER: 2001
+  BATCH: 256
+  LR: 1e-4
+  WT_DECAY: 1e-5
+  LMBD: 2.
+  OUTPUT_DIM: 1536
+  DROPOUT: 0.5
+  TEMP: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+
+LR:
+  WARM: True
+  ADJUST: False
+  WARM_ITER: 50
+  WARMUP_FROM: 1e-6
+  DECAY_RATE: 0.1
+
+COMMENTS:
+  New = ADDED SCHEDULER COSINE
+  # Before= same as config 89
+  

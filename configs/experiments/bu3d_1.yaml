@@ -1,0 +1,39 @@
+PATHS:
+  DATA_ROOT: /data/dataset/BU3DFE
+  VIS_PATH: ./sample/plots
+
+FLOW:
+  N_FLOW: 6
+  N_BLOCK: 4
+  N_CHAN: 3
+  MLP_DIM: 128
+  N_BITS: 5
+  TEMP: 0.7
+  N_SAMPLE: 20
+
+DATASET:
+  DS_NAME: BU3D
+  N_CLASS: 7
+  IMG_SIZE: 260 
+  NUM_WORKERS: 1
+  TEST: M0008
+  COUNT: 2000
+  N_VIEWS: 2
+  AUG: False
+  AUG2: False
+
+
+LOSS:
+  LAMBDA: 0.0051
+
+TRAINING:
+  ITER: 701
+  BATCH: 128
+  LR: 1e-4
+  WT_DECAY: 1e-5
+  LMBD: 2.
+  OUTPUT_DIM: 4704
+
+COMMENTS:
+  DS=RAF. WITH LR scheduler and lmbda values, COUNT 2000. Added weight decay. increased count.
+  No Augmentation
