@@ -51,37 +51,57 @@ class RafDb(Dataset):
     self.alb_train, self.alb_val, self.aug_transforms = self.get_augmentation()
     print(self.cnt_dict)
 
+
   def get_augmentation(self):
-    train_transform_dict = {}
-    trans_probs = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
-    for i in range(self.cfg.DATASET.N_CLASS):
-      train_transform_dict[self.allowed_labels[i]] = A.Compose([
-        A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
-        A.HorizontalFlip(p=trans_probs[i]),
-        A.GaussianBlur(p=trans_probs[i]),
-        #UPDATED
-        A.Rotate(p=trans_probs[i]),
-        ToTensorV2()
-        ], 
-        p=1)
-
-    train_transform_lst = transforms.Compose([
-        transforms.RandomResizedCrop(self.cfg.DATASET.IMG_SIZE, scale=(0.2, 1.)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomApply([
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
-        ], p=0.8),
-        transforms.RandomGrayscale(p=0.2),
-        transforms.ToTensor(),
-    ])
-    train_transform = TwoCropTransform(train_transform_lst)
-
-    val_transforms = A.Compose([
+    train_transforms = A.Compose([
       A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
+      A.HorizontalFlip(p=0.5),
+      A.GaussianBlur(p=0.5),
+      A.Rotate(p=0.5),
+      # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), p=1),
       ToTensorV2()
       ], 
       p=1)
-    return train_transform_dict, val_transforms, train_transform
+    val_transforms = A.Compose([
+      A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
+      # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), p=1),
+      ToTensorV2()
+      ], 
+      # keypoints_params = A.KeypointParams(format='xy'), 
+      p=1)
+    return train_transforms, val_transforms, None
+  
+  # def get_augmentation(self):
+  #   train_transform_dict = {}
+  #   trans_probs = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+  #   for i in range(self.cfg.DATASET.N_CLASS):
+  #     train_transform_dict[self.allowed_labels[i]] = A.Compose([
+  #       A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
+  #       A.HorizontalFlip(p=trans_probs[i]),
+  #       A.GaussianBlur(p=trans_probs[i]),
+  #       #UPDATED
+  #       A.Rotate(p=trans_probs[i]),
+  #       ToTensorV2()
+  #       ], 
+  #       p=1)
+
+  #   train_transform_lst = transforms.Compose([
+  #       transforms.RandomResizedCrop(self.cfg.DATASET.IMG_SIZE, scale=(0.2, 1.)),
+  #       transforms.RandomHorizontalFlip(),
+  #       transforms.RandomApply([
+  #           transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
+  #       ], p=0.8),
+  #       transforms.RandomGrayscale(p=0.2),
+  #       transforms.ToTensor(),
+  #   ])
+  #   train_transform = TwoCropTransform(train_transform_lst)
+
+  #   val_transforms = A.Compose([
+  #     A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
+  #     ToTensorV2()
+  #     ], 
+  #     p=1)
+  #   return train_transform_dict, val_transforms, train_transform
 
   def getAllFiles(self):
     all_files_dict = {}
@@ -129,7 +149,8 @@ class RafDb(Dataset):
       if self.aug2:
         image_aug = self.aug_transforms(image)
       elif self.aug:
-        transform = self.alb_train[int(label)](image=image_arr)
+        # transform = self.alb_train[int(label)](image=image_arr)
+        transform = self.alb_train(image=image_arr)
       elif not (self.aug or self.aug2):
         transform = self.alb_val(image=image_arr)
       image_aug = transform['image']

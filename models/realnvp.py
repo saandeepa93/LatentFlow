@@ -142,7 +142,7 @@ class CouplingLayerBase(nn.Module):
         # self.log_sds.append(log_sd)
         #positional encoding
         #x = x[:, :-2]
-        return x, mean, log_sd
+        return x, mean, log_sd, self._logdet
 
     def inverse(self, y):
         s, t, x_id, x_change = self._get_st(y)
@@ -212,9 +212,11 @@ class RealNVPBase(nn.Module):
 
     def forward(self,x):
       # return self.body(x)
+      logdet_all = 0
       for body in self.body:
-        x, mean, log_sd = body(x)
-      return x, mean, log_sd
+        x, mean, log_sd, log_det = body(x)
+        logdet_all += log_det
+      return x, mean, log_sd, logdet_all
 
     def logdet(self):
         return self.body.logdet()

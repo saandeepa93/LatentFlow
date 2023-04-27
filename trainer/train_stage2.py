@@ -1,5 +1,6 @@
 import torch 
 from torch import nn, optim
+from torch.nn import functional as F
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from torch.utils.data.dataloader import default_collate
 from torch.distributions import MultivariateNormal, Uniform, TransformedDistribution, SigmoidTransform
@@ -25,10 +26,21 @@ import pickle
 from sklearn import datasets
 
 from models import LatentModel
-from utils import plot_umap, gaussian_log_p, gaussian_sample, get_args, seed_everything
+from utils import plot_umap, gaussian_log_p, gaussian_sample, get_args, seed_everything, get_metrics
 from configs import get_cfg_defaults
 from loaders import CustomDataset, AffectDataset, RafDb
 from losses import FlowConLoss
+
+
+class LinearClassifier(nn.Module):
+  def __init__(self, cfg):
+    super().__init__()
+    self.linear = nn.Linear(cfg.FLOW.IN_FEAT, cfg.DATASET.N_CLASS)
+    
+  def forward(self, x):
+    x = self.linear(x)
+    return F.softmax(x, dim=-1)
+
 
 def adjust_learning_rate(cfg, optimizer, epoch):
     lr = cfg.TRAINING.LR
@@ -50,7 +62,29 @@ def warmup_learning_rate(cfg, epoch, batch_id, total_batches, optimizer):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+
+def label_smooth(target, n_classes: int, label_smoothing=0.1):
+    # convert to one-hot
+    batch_size = target.size(0)
+    target = torch.unsqueeze(target, 1)
+    soft_target = torch.zeros((batch_size, n_classes), device=target.device)
+    soft_target.scatter_(1, target, 1)
+    # label smoothing
+    soft_target = soft_target * (1 - label_smoothing) + label_smoothing / n_classes
+    return soft_target
+
+def cross_entropy_loss_with_soft_target(pred, soft_target, weights):
+    #logsoftmax = nn.LogSoftmax(dim=-1)
+    return torch.mean(torch.sum(- weights*soft_target * torch.nn.functional.log_softmax(pred, -1), 1))
+
+def cross_entropy_with_label_smoothing(pred, target, weights):
+    soft_target = label_smooth(target, pred.size(1)) #num_classes) #
+    return cross_entropy_loss_with_soft_target(pred, soft_target, weights)
+
+
+
 def prepare_dataset(cfg):
+  loss_wts = None
   # PREPARE LOADER
   if cfg.DATASET.DS_NAME == "BU3D":
     train_dataset = CustomDataset(cfg, "train")
@@ -77,6 +111,7 @@ def prepare_dataset(cfg):
       sampler = WeightedRandomSampler(sample_weight.type('torch.DoubleTensor'), len(sample_weight))
       train_loader = DataLoader(train_dataset, batch_size=cfg.TRAINING.BATCH, \
         num_workers=cfg.DATASET.NUM_WORKERS, sampler=sampler)
+      loss_wts = weight/np.amin(weight)
     else:
       sampler=None
       train_loader = DataLoader(train_dataset, batch_size=cfg.TRAINING.BATCH, shuffle=True, \
@@ -85,14 +120,19 @@ def prepare_dataset(cfg):
     val_dataset = RafDb(cfg, "val")
     val_loader = DataLoader(val_dataset, batch_size=cfg.TRAINING.BATCH, shuffle=True, \
       num_workers=cfg.DATASET.NUM_WORKERS)
-    
-  return train_loader, val_loader
-
-def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
-  avg_con_loss = []
-  avg_nll_loss = []
   
-  model.train()
+  class_freq = np.array(list(train_dataset.cnt_dict.values()))
+  weight = 1./class_freq
+  loss_wts = weight/np.amin(weight)
+
+  return train_loader, val_loader, loss_wts
+
+def train(loader, epoch, model, classifier, optimizer, criterion, cfg, device, sample_weight):
+  avg_loss = []
+  y_pred = []
+  y_true = []
+  model.eval()
+  classifier.train()
   for b, (image, exp, _) in enumerate(loader,0):
     if cfg.DATASET.AUG2:
       image = torch.cat(image, dim=0)
@@ -103,95 +143,50 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
     image = image.to(device)
     exp = exp.to(device)
 
-    # image = torch.floor(image / 2 ** (8 - cfg.FLOW.N_BITS))
-    # image = image / cfg.FLOW.N_BINS - 0.5
-    # image = image + torch.rand_like(image) / cfg.FLOW.N_BINS
-
     # WARMUP LEARNING RATE
     warmup_learning_rate(cfg, epoch, b, len(loader), optimizer)
 
     # FORWARD 
-    z, means, log_sds, sldj = model(image)
+    with torch.no_grad():
+      z, *_ = model(image)
+    out = classifier(z)
 
-    nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
-    con_loss = criterion.conLoss(log_p_all, exp)
-    con_loss_mean = con_loss.mean()
-
-    loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
+    loss = criterion(out, exp, sample_weight)
 
     with torch.no_grad():
-      avg_con_loss += con_loss.tolist()
-      avg_nll_loss.append(nll_loss.item())
+      avg_loss.append(loss.item())
+      y_pred += torch.argmax(out, dim=-1).cpu().tolist()
+      y_true += exp.cpu().tolist()
 
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
     
-  avg_con_loss = sum(avg_con_loss)/len(avg_con_loss)
-  avg_nll_loss = sum(avg_nll_loss)/len(avg_nll_loss)
-  # avg_con_loss = -1
+  avg_loss = sum(avg_loss)/len(avg_loss)
+  return avg_loss, y_pred, y_true
 
-  return avg_con_loss, avg_nll_loss, log_p.mean()
-
-def validate(loader, model, criterion, cfg, n_bins, device):
-  total_con_loss = []
-  total_nll_loss = []
+def validate(loader, model, classifier, criterion, device, sample_weight):
+  total_loss = []
+  y_pred = []
+  y_true = []
   model.eval()
+  classifier.eval()
   for b, (image, exp, _) in enumerate(loader,0):
       
     image = image.to(device)
     exp = exp.to(device)
 
-    # image = torch.floor(image / 2 ** (8 - cfg.FLOW.N_BITS))
-    # image = image / cfg.FLOW.N_BINS - 0.5
-    # image = image + torch.rand_like(image) / cfg.FLOW.N_BINS
-
     # FORWARD 
-    z, means, log_sds, sldj = model(image)
+    z, *_ = model(image)
+    out = classifier(z)
+    loss = criterion(out, exp, sample_weight)
 
-    nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
-    con_loss = criterion.conLoss(log_p_all, exp)
-    con_loss_mean = con_loss.mean()
+    total_loss.append(loss.item())
+    y_pred += torch.argmax(out, dim=-1).cpu().tolist()
+    y_true += exp.cpu().tolist()
 
-    loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
-
-    total_con_loss += con_loss.tolist()
-    total_nll_loss.append(nll_loss.item())
-
-  avg_con_loss = sum(total_con_loss)/len(total_con_loss)
-  avg_nll_loss = sum(total_nll_loss)/len(total_nll_loss)
-
-  return avg_con_loss, avg_nll_loss
-
-def sample(net, prior, batch_size, eps, cls=None):
-    """Sample from RealNVP model.
-
-    Args:
-        net (torch.nn.DataParallel): The RealNVP model wrapped in DataParallel.
-        batch_size (int): Number of samples to generate.
-        device (torch.device): Device to use.
-    """
-    mean = torch.zeros((256, 2))
-    log_sd = torch.zeros((256,2))
-
-    with torch.no_grad():
-        if cls is not None:
-            z = prior.sample((batch_size,), gaussian_id=cls)
-        else:
-            # z = prior.sample((batch_size,))
-            eps = torch.randn((256, 2))
-            z = gaussian_sample(eps, mean, log_sd)
-        x = net.inverse(z)
-
-        return x
-
-class DatasetMoons:
-    """ two half-moons """
-    def sample(self, n):
-        moons, y = datasets.make_moons(n_samples=n, noise=0.05)
-        moons = moons.astype(np.float32)
-        y = y.astype(np.int8)
-        return torch.from_numpy(moons), torch.from_numpy(y)
+  total_loss = sum(total_loss)/len(total_loss)
+  return total_loss, y_pred, y_true
 
 if __name__ == "__main__":
   seed_everything(42)
@@ -204,67 +199,79 @@ if __name__ == "__main__":
   config_path = os.path.join("./configs/experiments", f"{args.config}.yaml")
 
   # SET TENSORBOARD PATH
-  writer = SummaryWriter(f'./runs/{args.config}')
+  writer = SummaryWriter(f'./runs2/{args.config}_stage2')
 
   # LOAD CONFIGURATION
   cfg = get_cfg_defaults()
   cfg.merge_from_file(config_path)
+  cfg.DATASET.W_SAMPLER = False
   cfg.freeze()
   print(cfg)
   
 
   model = LatentModel(cfg)
   model = model.to(device)
+  checkpoint = torch.load(f"./checkpoints/{args.config}_model_final.pt", map_location=device)
+  model.load_state_dict(checkpoint)
+
+  classifier = LinearClassifier(cfg)
+  classifier = classifier.to(device)
+  print("number of params: ", sum(p.numel() for p in classifier.parameters() if p.requires_grad))
 
     # optimizer
-  optimizer = optim.Adam(model.parameters(), lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY) # todo tune WD
-  print("number of params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
   # PREPARE LOADER
-  train_loader, val_loader = prepare_dataset(cfg)
+  train_loader, val_loader, loss_weights = prepare_dataset(cfg)
+  loss_weights = torch.from_numpy(loss_weights).to(device)
   
   # PREPARE OPTIMIZER
-  optimizer = optim.AdamW(model.parameters(), lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY)
+  optimizer = optim.AdamW(classifier.parameters(), lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY)
   scheduler = CosineAnnealingLR(optimizer, cfg.LR.T_MAX, cfg.LR.MIN_LR)
 
-  criterion = FlowConLoss(cfg, device)
+  # criterion = nn.CrossEntropyLoss()
+  criterion = cross_entropy_with_label_smoothing
 
   # START TRAINING
   min_loss = 1e5
+  best_acc = 0
   n_bins = 0
   pbar = tqdm(range(cfg.TRAINING.ITER))
   for i in pbar:
 
     # TRAINING
-    avg_con_loss, avg_nll_loss, log_p = train(train_loader, i, model, optimizer, criterion, cfg, n_bins, device)
+    train_loss, y_pred_train, y_true_train = train(train_loader, i, model, classifier, optimizer, criterion, cfg, device, loss_weights)
     with torch.no_grad():
-      val_con_loss, val_nll_loss = validate(val_loader, model, criterion, cfg, n_bins, device)
+      val_loss, y_pred_val, y_true_val = validate(val_loader, model, classifier, criterion, device, loss_weights)
     
+    train_acc, train_mcc, train_conf = get_metrics(y_pred_train, y_true_train)
+    val_acc, val_mcc, val_conf = get_metrics(y_pred_val, y_true_val)
     # ADJUST LR
     if cfg.LR.ADJUST:
       scheduler.step()
 
     curr_lr = optimizer.param_groups[0]["lr"] 
 
+
     # BEST MODEL
-    if val_con_loss < min_loss:
-      min_loss = val_con_loss
-      torch.save(model.state_dict(), f"checkpoints/{args.config}_model_final.pt")
+    if val_loss < min_loss:
+      min_loss = val_loss
+      best_acc = val_acc
+      torch.save(model.state_dict(), f"checkpoints/{args.config}_model_final_linear.pt")
 
     # SAVE MODEL EVERY k EPOCHS
     # if i % 200 == 0:
     #   torch.save(model.state_dict(), f"checkpoint/{args.config}_model_{str(i + 1).zfill(6)}.pt")
       # torch.save(optimizer.state_dict(), f"checkpoint/{args.config}_optim_{str(i + 1).zfill(6)}.pt")
 
-    pbar.set_description(
-      f"Train NLL Loss: {round(avg_nll_loss, 4):.5f}; Train Con Loss: {round(avg_con_loss, 4)};\
-        Val NLL Loss: {round(val_nll_loss, 4)}; Val Con Loss: {round(val_con_loss, 4)}\
-        logP: {log_p.item():.5f}; lr: {curr_lr:.7f}; Min NLL: {round(min_loss, 3)} "
-      )
     
-    writer.add_scalar("Train/Contrastive", round(avg_con_loss, 4), i)
-    writer.add_scalar("Train/NLL", round(avg_nll_loss, 4), i)
-    writer.add_scalar("Val/Contrastive", round(val_con_loss, 4), i)
-    writer.add_scalar("Val/NLL", round(val_nll_loss, 4), i)
-    writer.add_scalar("lr", round(curr_lr, 4), i)
+    pbar.set_description(
+        f"train_loss: {round(train_loss, 4)}; train_acc: {round(train_acc, 4)};"
+        f"val_loss: {round(val_loss, 4)}; val_acc: {round(val_acc, 4)}"
+        f"best_acc: {round(best_acc, 4)};"
+                        ) 
+    
+    writer.add_scalar("Train/Loss", round(train_loss, 4), i)
+    writer.add_scalar("Train/Acc", round(train_acc, 4), i)
+    writer.add_scalar("Val/Loss", round(val_loss, 4), i)
+    writer.add_scalar("Val/Acc", round(val_acc, 4), i)
     

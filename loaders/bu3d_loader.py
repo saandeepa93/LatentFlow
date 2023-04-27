@@ -39,15 +39,15 @@ class CustomDataset(Dataset):
   def get_augmentation(self):
     train_transforms = A.Compose([
       A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
-      # A.HorizontalFlip(p=0.5),
+      A.HorizontalFlip(p=0.5),
       # A.GaussianBlur(p=0.5),
-      A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), p=1),
+      # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), p=1),
       ToTensorV2()
       ], 
       p=1)
     val_transforms = A.Compose([
       A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
-      A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), p=1),
+      # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), p=1),
       ToTensorV2()
       ], 
       # keypoints_params = A.KeypointParams(format='xy'), 

@@ -28,45 +28,45 @@ def mkdir(path):
   if not os.path.isdir(path):
     os.mkdir(path)
 
-# def plot_umap(cfg, X_lst_un, y_lst, name, fname_all, dim, mode):
-#   b = X_lst_un.size(0)
-#   X_lst = UMAP(n_components=dim, random_state=0, init='random').fit_transform(X_lst_un.view(b, -1))
-#   y_lst_label = [str(i) for i in y_lst.detach().numpy()]
+def plot_umap(cfg, X_lst_un, y_lst, name, fname_all, dim, mode):
+  b = X_lst_un.size(0)
+  X_lst = UMAP(n_components=dim, random_state=0, init='random').fit_transform(X_lst_un.view(b, -1))
+  y_lst_label = [str(i) for i in y_lst.detach().numpy()]
 
-#   if dim == 3:
-#     df = pd.DataFrame(X_lst, columns=["x", "y", "z"])
-#   else:
-#     df = pd.DataFrame(X_lst, columns=["x", "y"])
-#   df_color = pd.DataFrame(y_lst_label, columns=["class"])
-#   df_fname = pd.DataFrame(fname_all, columns=["fname"])
-#   df = df.join(df_color)
-#   df = df.join(df_fname)
-#   cls_list  = list(inv_exp_dict[cfg.DATASET.DS_NAME].values())
-#   cls_lst_name = [cls_list[int(k)] for k in y_lst_label]
-#   df_exp = pd.DataFrame(cls_lst_name, columns=["expr"])
-#   df = df.join(df_exp)
+  if dim == 3:
+    df = pd.DataFrame(X_lst, columns=["x", "y", "z"])
+  else:
+    df = pd.DataFrame(X_lst, columns=["x", "y"])
+  df_color = pd.DataFrame(y_lst_label, columns=["class"])
+  df_fname = pd.DataFrame(fname_all, columns=["fname"])
+  df = df.join(df_color)
+  df = df.join(df_fname)
+  cls_list  = list(inv_exp_dict[cfg.DATASET.DS_NAME].values())
+  cls_lst_name = [cls_list[int(k)] for k in y_lst_label]
+  df_exp = pd.DataFrame(cls_lst_name, columns=["expr"])
+  df = df.join(df_exp)
   
-#   if dim == 3:
-#     fig = px.scatter_3d(df, x='x', y='y', z='z',color='class', title=f"{name}", \
-#       # hover_data=[df.fname])
-#       category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr])
-#   else:
-#     fig = px.scatter(df, x='x', y='y',color='class', title=f"{name}", \
-#       # hover_data=[df.fname])
-#       category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr])
+  if dim == 3:
+    fig = px.scatter_3d(df, x='x', y='y', z='z',color='class', title=f"{name}", \
+      # hover_data=[df.fname])
+      category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr])
+  else:
+    fig = px.scatter(df, x='x', y='y',color='class', title=f"{name}", \
+      # hover_data=[df.fname])
+      category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr])
   
-#   fig.update_traces(marker=dict(size=6))
-#   fig.update_layout(legend=dict(
-#     yanchor="top",
-#     y=0.60,
-#     xanchor="left",
-#     x=0.70
-#     ))
+  fig.update_traces(marker=dict(size=6))
+  fig.update_layout(legend=dict(
+    yanchor="top",
+    y=0.60,
+    xanchor="left",
+    x=0.70
+    ))
   
-#   dest_path = os.path.join("./data/umap/", name)
-#   mkdir(dest_path)
-#   # fig.update_traces(hovertemplate = 'fname=%{customdata[0]}<br>')
-#   fig.write_html(os.path.join(dest_path, f"{dim}d_{mode}.html"))
+  dest_path = os.path.join("./data/umap/", name)
+  mkdir(dest_path)
+  # fig.update_traces(hovertemplate = 'fname=%{customdata[0]}<br>')
+  fig.write_html(os.path.join(dest_path, f"{dim}d_{mode}.html"))
 
 def grad_flow(named_parameters):
   ave_grads = 0
@@ -123,32 +123,32 @@ def gaussian_sample(eps, mean, log_sd):
   # return mean + torch.exp(log_sd) 
 
 
-def plot_umap(X_lst, dim=2):
-  b = X_lst.size(0)
-  # X_lst = UMAP(n_components=dim, random_state=0, init='random').fit_transform(X_lst_un.view(b, -1))
+# def plot_umap(X_lst, dim=2):
+#   b = X_lst.size(0)
+#   # X_lst = UMAP(n_components=dim, random_state=0, init='random').fit_transform(X_lst_un.view(b, -1))
 
-  if dim == 3:
-    df = pd.DataFrame(X_lst, columns=["x", "y", "z"])
-  else:
-    df = pd.DataFrame(X_lst, columns=["x", "y"])
+#   if dim == 3:
+#     df = pd.DataFrame(X_lst, columns=["x", "y", "z"])
+#   else:
+#     df = pd.DataFrame(X_lst, columns=["x", "y"])
   
-  if dim == 3:
-    fig = px.scatter_3d(df, x='x', y='y', z='z',title=f"test", \
-      # hover_data=[df.fname])
-      # category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr]
-        )
-  else:
-    fig = px.scatter(df, x='x', y='y', title=f"test", \
-      # hover_data=[df.fname])
-      # category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr]
-      )
+#   if dim == 3:
+#     fig = px.scatter_3d(df, x='x', y='y', z='z',title=f"test", \
+#       # hover_data=[df.fname])
+#       # category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr]
+#         )
+#   else:
+#     fig = px.scatter(df, x='x', y='y', title=f"test", \
+#       # hover_data=[df.fname])
+#       # category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr]
+#       )
   
-  fig.update_traces(marker=dict(size=6))
-  fig.update_layout(legend=dict(
-    yanchor="top",
-    y=0.60,
-    xanchor="left",
-    x=0.70
-    ))
+#   fig.update_traces(marker=dict(size=6))
+#   fig.update_layout(legend=dict(
+#     yanchor="top",
+#     y=0.60,
+#     xanchor="left",
+#     x=0.70
+#     ))
   
-  fig.write_html("plot.html")
+#   fig.write_html("plot.html")
