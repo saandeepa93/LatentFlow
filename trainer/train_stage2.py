@@ -30,15 +30,22 @@ from utils import plot_umap, gaussian_log_p, gaussian_sample, get_args, seed_eve
 from configs import get_cfg_defaults
 from loaders import CustomDataset, AffectDataset, RafDb
 from losses import FlowConLoss
+from trainer.robust_optimization import RobustOptimizer
 
 
 class LinearClassifier(nn.Module):
   def __init__(self, cfg):
     super().__init__()
-    self.linear = nn.Linear(cfg.FLOW.IN_FEAT, cfg.DATASET.N_CLASS)
+    self.linear = nn.Linear(cfg.FLOW.IN_FEAT, 256)
+    self.relu = nn.ReLU()
+    self.drop = nn.Dropout(0.3)
+    self.linear2 = nn.Linear(256, cfg.DATASET.N_CLASS)
     
   def forward(self, x):
     x = self.linear(x)
+    x = self.drop(x)
+    x = self.relu(x)
+    x = self.linear2(x)
     return F.softmax(x, dim=-1)
 
 
@@ -128,6 +135,7 @@ def prepare_dataset(cfg):
   return train_loader, val_loader, loss_wts
 
 def train(loader, epoch, model, classifier, optimizer, criterion, cfg, device, sample_weight):
+  robust = False
   avg_loss = []
   y_pred = []
   y_true = []
@@ -153,15 +161,27 @@ def train(loader, epoch, model, classifier, optimizer, criterion, cfg, device, s
 
     loss = criterion(out, exp, sample_weight)
 
+    if robust:
+      #optimizer.zero_grad()
+      loss.backward()
+      optimizer.first_step(zero_grad=True)
+      # second forward-backward pass
+      with torch.no_grad():
+        z, *_ = model(image)
+      out = classifier(z)
+      loss = criterion(out, exp, sample_weight)
+      loss.backward()
+      optimizer.second_step(zero_grad=True)
+    else:
+      optimizer.zero_grad()
+      loss.backward()
+      optimizer.step()
+
     with torch.no_grad():
       avg_loss.append(loss.item())
       y_pred += torch.argmax(out, dim=-1).cpu().tolist()
-      y_true += exp.cpu().tolist()
+      y_true += exp.cpu().tolist()      
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    
   avg_loss = sum(avg_loss)/len(avg_loss)
   return avg_loss, y_pred, y_true
 
@@ -205,6 +225,10 @@ if __name__ == "__main__":
   cfg = get_cfg_defaults()
   cfg.merge_from_file(config_path)
   cfg.DATASET.W_SAMPLER = False
+  cfg.TRAINING.LR = 1e-3
+  cfg.TRAINING.ITER = 101
+  # cfg.LR.ADJUST = True
+  # cfg.LR.WARM = False
   cfg.freeze()
   print(cfg)
   
@@ -226,6 +250,7 @@ if __name__ == "__main__":
   
   # PREPARE OPTIMIZER
   optimizer = optim.AdamW(classifier.parameters(), lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY)
+  # optimizer = RobustOptimizer(filter(lambda p: p.requires_grad, classifier.parameters()), optim.Adam, lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY)
   scheduler = CosineAnnealingLR(optimizer, cfg.LR.T_MAX, cfg.LR.MIN_LR)
 
   # criterion = nn.CrossEntropyLoss()
@@ -253,9 +278,10 @@ if __name__ == "__main__":
 
 
     # BEST MODEL
-    if val_loss < min_loss:
+    if val_acc > best_acc:
       min_loss = val_loss
       best_acc = val_acc
+      ic(val_conf)
       torch.save(model.state_dict(), f"checkpoints/{args.config}_model_final_linear.pt")
 
     # SAVE MODEL EVERY k EPOCHS
@@ -266,7 +292,7 @@ if __name__ == "__main__":
     
     pbar.set_description(
         f"train_loss: {round(train_loss, 4)}; train_acc: {round(train_acc, 4)};"
-        f"val_loss: {round(val_loss, 4)}; val_acc: {round(val_acc, 4)}"
+        f"val_loss: {round(val_loss, 4)}; val_acc: {round(val_acc, 4)};"
         f"best_acc: {round(best_acc, 4)};"
                         ) 
     

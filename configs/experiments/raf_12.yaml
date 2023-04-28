@@ -4,7 +4,7 @@ PATHS:
 
 FLOW:
   N_FLOW: 3
-  N_BLOCK: 8
+  N_BLOCK: 12
   IN_FEAT: 1280
   MLP_DIM: 256
   TEMP: 0.7
@@ -15,7 +15,7 @@ DATASET:
   DS_NAME: RAF
   N_CLASS: 7
   IMG_SIZE: 260
-  NUM_WORKERS: 0
+  NUM_WORKERS: 2
   TEST: M0008
   COUNT: 5000
   N_VIEWS: 2
@@ -24,7 +24,7 @@ DATASET:
   W_SAMPLER: True
 
 TRAINING:
-  ITER: 701
+  ITER: 301
   BATCH: 64
   LR: 1e-4
   WT_DECAY: 1e-5
@@ -32,6 +32,7 @@ TRAINING:
   OUTPUT_DIM: 1536
   DROPOUT: 0.5
   TEMP: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+  PRETRAINED: eff
 
 LR:
   WARM: True
@@ -44,6 +45,6 @@ LR:
 
 
 COMMENTS:
-  New = 0.25 tau2 (4th root), removed preprocessing of images. 
+  New = Increased num layers within each coupling block
   # Before= same as config 89
   

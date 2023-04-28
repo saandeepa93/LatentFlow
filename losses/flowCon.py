@@ -23,13 +23,15 @@ def bhatta_coeff(z1, z2):
 
 
 class FlowConLoss:
-  def __init__(self, cfg, device, n_bins = 32):
+  def __init__(self, cfg, device):
     self.cfg = cfg
     self.device=device
-    self.n_bins = n_bins
+    self.n_bins = cfg.FLOW.N_BINS
     self.device = device
-    self.n_pixel = 1280
-    self.init_loss = -log(n_bins) * self.n_pixel
+    self.n_pixel = cfg.FLOW.IN_FEAT
+
+    # RAF12
+    self.init_loss = -log(self.n_bins) * self.n_pixel
 
   def nllLoss(self, z, logdet, mu, log_sd):
     b_size, _ = z.size()
@@ -58,8 +60,8 @@ class FlowConLoss:
     loss = self.init_loss + logdet + log_p_nll
     
     return ( 
-      (-loss / (log(2) * self.n_pixel)).mean(),
-      (log_p_nll / (log(2) * self.n_pixel)).mean(),
+      (-loss / (log(2) * self.n_pixel)).mean(), # CONVERTING LOGe to LOG2 |
+      (log_p_nll / (log(2) * self.n_pixel)).mean(), #                     v
       (logdet / (log(2) * self.n_pixel)).mean(), 
       (log_p_all/ (log(2) * self.n_pixel))
       # log_p_nll
@@ -82,7 +84,7 @@ class FlowConLoss:
 
     # Compute pairwise bhatta coeff. (0.5* (8, 8) + (8, 1))
     # pairwise = (0.5 * (log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1)))
-    pairwise = (0.25 * log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1))
+    pairwise = (0.33 * log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1))
     # pairwise = (0.1 * log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1))
 
     # pairwise = pairwise * off_diagonal

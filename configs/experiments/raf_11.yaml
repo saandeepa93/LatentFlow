@@ -15,7 +15,7 @@ DATASET:
   DS_NAME: RAF
   N_CLASS: 7
   IMG_SIZE: 260
-  NUM_WORKERS: 0
+  NUM_WORKERS: 2
   TEST: M0008
   COUNT: 5000
   N_VIEWS: 2
@@ -44,6 +44,6 @@ LR:
 
 
 COMMENTS:
-  New = 0.25 tau2 (4th root), removed preprocessing of images. 
+  New = reduced 0.5 to 0.33 during Bhatta calculation. They act as temperature/Tau. 
   # Before= same as config 89
   

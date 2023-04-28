@@ -29,6 +29,7 @@ from utils import plot_umap, gaussian_log_p, gaussian_sample, get_args, seed_eve
 from configs import get_cfg_defaults
 from loaders import CustomDataset, AffectDataset, RafDb
 from losses import FlowConLoss
+from trainer.robust_optimization import RobustOptimizer
 
 def adjust_learning_rate(cfg, optimizer, epoch):
     lr = cfg.TRAINING.LR
@@ -73,6 +74,8 @@ def prepare_dataset(cfg):
     if cfg.DATASET.W_SAMPLER:
       class_freq = np.array(list(train_dataset.cnt_dict.values()))
       weight = 1./class_freq
+      #RAF_10
+      # weight[2] = weight[2] * 2
       sample_weight = torch.tensor([weight[t] for t in train_dataset.all_labels])
       sampler = WeightedRandomSampler(sample_weight.type('torch.DoubleTensor'), len(sample_weight))
       train_loader = DataLoader(train_dataset, batch_size=cfg.TRAINING.BATCH, \
@@ -91,7 +94,7 @@ def prepare_dataset(cfg):
 def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
   avg_con_loss = []
   avg_nll_loss = []
-  
+  robust = False
   model.train()
   for b, (image, exp, _) in enumerate(loader,0):
     if cfg.DATASET.AUG2:
@@ -123,9 +126,22 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
       avg_con_loss += con_loss.tolist()
       avg_nll_loss.append(nll_loss.item())
 
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
+    if robust:
+      #optimizer.zero_grad()
+      loss.backward()
+      optimizer.first_step(zero_grad=True)
+      # second forward-backward pass
+      nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
+      con_loss = criterion.conLoss(log_p_all, exp)
+      con_loss_mean = con_loss.mean()
+  
+      loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
+      loss.backward()
+      optimizer.second_step(zero_grad=True)
+    else:
+      optimizer.zero_grad()
+      loss.backward()
+      optimizer.step()
     
   avg_con_loss = sum(avg_con_loss)/len(avg_con_loss)
   avg_nll_loss = sum(avg_nll_loss)/len(avg_nll_loss)
@@ -163,36 +179,6 @@ def validate(loader, model, criterion, cfg, n_bins, device):
 
   return avg_con_loss, avg_nll_loss
 
-def sample(net, prior, batch_size, eps, cls=None):
-    """Sample from RealNVP model.
-
-    Args:
-        net (torch.nn.DataParallel): The RealNVP model wrapped in DataParallel.
-        batch_size (int): Number of samples to generate.
-        device (torch.device): Device to use.
-    """
-    mean = torch.zeros((256, 2))
-    log_sd = torch.zeros((256,2))
-
-    with torch.no_grad():
-        if cls is not None:
-            z = prior.sample((batch_size,), gaussian_id=cls)
-        else:
-            # z = prior.sample((batch_size,))
-            eps = torch.randn((256, 2))
-            z = gaussian_sample(eps, mean, log_sd)
-        x = net.inverse(z)
-
-        return x
-
-class DatasetMoons:
-    """ two half-moons """
-    def sample(self, n):
-        moons, y = datasets.make_moons(n_samples=n, noise=0.05)
-        moons = moons.astype(np.float32)
-        y = y.astype(np.int8)
-        return torch.from_numpy(moons), torch.from_numpy(y)
-
 if __name__ == "__main__":
   seed_everything(42)
 
@@ -215,9 +201,6 @@ if __name__ == "__main__":
 
   model = LatentModel(cfg)
   model = model.to(device)
-
-    # optimizer
-  optimizer = optim.Adam(model.parameters(), lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY) # todo tune WD
   print("number of params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
   # PREPARE LOADER
@@ -225,6 +208,7 @@ if __name__ == "__main__":
   
   # PREPARE OPTIMIZER
   optimizer = optim.AdamW(model.parameters(), lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY)
+  # optimizer = RobustOptimizer(filter(lambda p: p.requires_grad, model.parameters()), optim.Adam, lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY)
   scheduler = CosineAnnealingLR(optimizer, cfg.LR.T_MAX, cfg.LR.MIN_LR)
 
   criterion = FlowConLoss(cfg, device)
