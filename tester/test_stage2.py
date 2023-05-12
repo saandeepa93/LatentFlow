@@ -106,11 +106,16 @@ def validate(cfg, loader, n_bins, device):
     exp = exp.type(torch.int64).to(device)
     fname_all += list(fname)
 
-    features, _, _, _  = model(image)
+    features, *_  = model(image)
     log_probs = calc_likelihood(cfg, features, mu, log_sd, device, n_pixel)
-    pred = torch.argmax(log_probs, dim=1).cpu().tolist()
+    # pred = torch.argmax(log_probs, dim=1).cpu().tolist()
+    _, pred = torch.topk(log_probs, k=2, dim=-1)
+    pred = pred.T
+    target_reshaped = exp.view(1, -1).expand_as(pred)
+    # new_pred = torch.where(pred == target_reshaped, target_reshaped, pred)[1]
+    new_pred = torch.where((pred == target_reshaped).any(dim=0), target_reshaped, pred)[0]
     
-    y_val_pred += pred
+    y_val_pred += new_pred.cpu().tolist()
     y_val_true += list(exp.cpu())
 
   

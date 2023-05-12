@@ -3,9 +3,9 @@ PATHS:
   VIS_PATH: ./sample/plots/RAF
 
 FLOW:
-  N_FLOW: 1
-  N_BLOCK: 12
-  IN_FEAT: 1280
+  N_FLOW: 3
+  N_BLOCK: 15
+  IN_FEAT: 512
   MLP_DIM: 256
   TEMP: 0.7
   N_SAMPLE: 20
@@ -14,7 +14,7 @@ FLOW:
 DATASET:
   DS_NAME: RAF
   N_CLASS: 7
-  IMG_SIZE: 260
+  IMG_SIZE: 224
   NUM_WORKERS: 2
   TEST: M0008
   COUNT: 5000
@@ -32,11 +32,11 @@ TRAINING:
   OUTPUT_DIM: 1536
   DROPOUT: False
   TEMP: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-  PRETRAINED: eff
+  PRETRAINED: res34
 
 LR:
-  WARM: True
-  ADJUST: True
+  WARM: False
+  ADJUST: False
   WARM_ITER: 50
   WARMUP_FROM: 1e-6
   DECAY_RATE: 0.1
@@ -45,6 +45,6 @@ LR:
 
 
 COMMENTS:
-  New = Increased num layers within each coupling block
+  New = Inception V1
   # Before= same as config 89
   

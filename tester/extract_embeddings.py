@@ -81,7 +81,7 @@ def save_flow_embedding(cfg, args, loader, model, mode, device):
         x = x.to(device)
         label = label.to(device)
 
-        features, means, log_sds, logdet   = model(x)
+        features, means, log_sds, logdet, *_   = model(x)
         z_dict.append(features)
         mu_dict.append(means)
         std_dict.append(log_sds)

@@ -6,7 +6,7 @@ FLOW:
   N_FLOW: 1
   N_BLOCK: 12
   IN_FEAT: 1280
-  MLP_DIM: 256
+  MLP_DIM: 392
   TEMP: 0.7
   N_SAMPLE: 20
   INIT_ZEROS: False
@@ -45,6 +45,6 @@ LR:
 
 
 COMMENTS:
-  New = Increased num layers within each coupling block
+  New = same as 14 increased MLP DIM
   # Before= same as config 89
   

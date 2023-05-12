@@ -95,35 +95,16 @@ class CouplingLayerBase(nn.Module):
     """
 
     def _get_st(self, x):
-        #positional encoding
-        #bs, c, h, w = x.shape
-        #y_coords = torch.arange(h).float().cuda() / h
-        #y_coords = y_coords[None, None, :, None].repeat((bs, 1, 1, w))
-        #x_coords = torch.arange(w).float().cuda() / w
-        #x_coords = x_coords[None, None, None, :].repeat((bs, 1, h, 1))
-        #x = torch.cat([x, y_coords, x_coords], dim=1)
-
         x_id, x_change = self.mask.mask(x)
         st = self.st_net(x_id)
-        #st = self.st_net(F.dropout(x_id, training=self.training, p=0.5))
-        #st = self.st_net(F.dropout(x_id, training=True, p=0.9))
         s, t = st.chunk(2, dim=1)
         s = self.rescale(torch.tanh(s))
 
-        #positional encoding
-        #s = s[:, :-2]
-        #t = t[:, :-2]
-        #x_id = x_id[:, :-2]
-        #x_change = x_change[:, :-2]
         return s, t, x_id, x_change
 
     def forward(self, x, sldj=None, reverse=True):
         s, t, x_id, x_change = self._get_st(x)
         s, t = self.mask.mask_st_output(s, t)
-
-        #positional encoding
-        #s = s[:, :-2]
-        #t = t[:, :-2]
 
         exp_s = s.exp()
         if torch.isnan(exp_s).any():
@@ -136,12 +117,9 @@ class CouplingLayerBase(nn.Module):
         x = self.mask.unmask(x_id, x_change)
 
         x_change_valid = self.mask.get_valid_half(x_change)
-
+        
+        # LEARNED PRIOR
         mean, log_sd = self.prior(x_change_valid).chunk(2, 1)
-        # self.means.append(mean)
-        # self.log_sds.append(log_sd)
-        #positional encoding
-        #x = x[:, :-2]
         return x, mean, log_sd, self._logdet
 
     def inverse(self, y):
@@ -155,8 +133,6 @@ class CouplingLayerBase(nn.Module):
         self._logdet = -s.view(s.size(0), -1).sum(-1)
         x = self.mask.unmask(x_id, x_change)
 
-        #positional encoding
-        #x = x[:, :-2]
         return x
 
     def logdet(self):
@@ -169,10 +145,10 @@ class ZeroLinear(nn.Module):
     self.linear = nn.Linear(in_dim, out_dim)
     self.linear.weight.data.zero_()
     self.linear.bias.data.zero_()
-    # self.scale = nn.Parameter(torch.zeros(1, out_channel))
   
   def forward(self, input):
     out = self.linear(input)
+    
     return out
 
 class CouplingLayerTabular(CouplingLayerBase):
@@ -197,7 +173,6 @@ class CouplingLayerTabular(CouplingLayerBase):
                 torch.nn.init.zeros_(self.st_net[-1].bias)
 
         self.rescale = nn.utils.weight_norm(RescaleTabular(in_dim))
-        # self.rescale = nn.utils.weight_norm(RescaleTabular(in_dim*2))
 
     @staticmethod
     def _inner_seq(num_layers, mid_dim):

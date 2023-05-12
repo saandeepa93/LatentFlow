@@ -30,6 +30,9 @@ class FlowConLoss:
     self.device = device
     self.n_pixel = cfg.FLOW.IN_FEAT
 
+    self.tau2 = nn.Parameter(torch.tensor(0.33))
+    # self.tau2 = nn.Parameter(torch.tensor(0.33))
+
     # RAF12
     self.init_loss = -log(self.n_bins) * self.n_pixel
 
@@ -73,6 +76,9 @@ class FlowConLoss:
     # tau = torch.index_select(self.temp, 0, labels)
     tau = 0.1
     
+    tau2_sin = torch.tensor([0.33, 0.07, 0.07, 0.33, 0.33, 0.33, 0.33], device=self.device)
+    tau2 = torch.index_select(tau2_sin, 0, labels).view(-1, 1).repeat(1, b)
+    
     # Create similarity and dissimilarity masks
     off_diagonal = torch.ones((b, b), device=self.device) - torch.eye(b, device=self.device)
     labels = labels.contiguous().view(-1, 1)
@@ -84,8 +90,9 @@ class FlowConLoss:
 
     # Compute pairwise bhatta coeff. (0.5* (8, 8) + (8, 1))
     # pairwise = (0.5 * (log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1)))
-    pairwise = (0.33 * log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1))
-    # pairwise = (0.1 * log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1))
+    pairwise = (self.tau2 * log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1))
+    # pairwise = log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1)
+    # pairwise = tau2 * pairwise
 
     # pairwise = pairwise * off_diagonal
     pairwise_exp = torch.div(torch.exp(

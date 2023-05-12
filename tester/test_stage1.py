@@ -113,12 +113,10 @@ if __name__ == "__main__":
   # checkpoint = torch.load(f"./checkpoint/{args.config}_model_000201.pt", map_location=device)
   model.load_state_dict(checkpoint)
 
- 
-
   # train_image = get_image_tensor("/data/dataset/BU3DFE/M0007/M0007_HA01AE_F2D.bmp")
   # train_image = get_image_tensor("/data/dataset/BU3DFE/F0030/F0030_FE01BL_F2D.bmp")
   
-  train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_11815_aligned.jpg")
+  train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_06671_aligned.jpg")
   train_image = train_image.to(device)
   # train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_08604_aligned.jpg")
   # train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/test_0286_aligned.jpg")

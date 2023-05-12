@@ -106,21 +106,20 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
     image = image.to(device)
     exp = exp.to(device)
 
-    # image = torch.floor(image / 2 ** (8 - cfg.FLOW.N_BITS))
-    # image = image / cfg.FLOW.N_BINS - 0.5
-    # image = image + torch.rand_like(image) / cfg.FLOW.N_BINS
-
     # WARMUP LEARNING RATE
     warmup_learning_rate(cfg, epoch, b, len(loader), optimizer)
 
     # FORWARD 
-    z, means, log_sds, sldj = model(image)
+    z, means, log_sds, sldj, log_vars = model(image)
 
     nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
     con_loss = criterion.conLoss(log_p_all, exp)
     con_loss_mean = con_loss.mean()
 
-    loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
+    # loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
+    pre1 = torch.exp(-log_vars[0])
+    pre2 = torch.exp(-log_vars[1])
+    loss = ((pre1) * con_loss_mean) + ((pre2) * nll_loss) + (log_vars[0] + log_vars[1])
 
     with torch.no_grad():
       avg_con_loss += con_loss.tolist()
@@ -147,7 +146,7 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
   avg_nll_loss = sum(avg_nll_loss)/len(avg_nll_loss)
   # avg_con_loss = -1
 
-  return avg_con_loss, avg_nll_loss, log_p.mean()
+  return avg_con_loss, avg_nll_loss, log_p.mean(), log_vars
 
 def validate(loader, model, criterion, cfg, n_bins, device):
   total_con_loss = []
@@ -158,18 +157,12 @@ def validate(loader, model, criterion, cfg, n_bins, device):
     image = image.to(device)
     exp = exp.to(device)
 
-    # image = torch.floor(image / 2 ** (8 - cfg.FLOW.N_BITS))
-    # image = image / cfg.FLOW.N_BINS - 0.5
-    # image = image + torch.rand_like(image) / cfg.FLOW.N_BINS
-
     # FORWARD 
-    z, means, log_sds, sldj = model(image)
+    z, means, log_sds, sldj, log_vars = model(image)
 
     nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
     con_loss = criterion.conLoss(log_p_all, exp)
     con_loss_mean = con_loss.mean()
-
-    loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
 
     total_con_loss += con_loss.tolist()
     total_nll_loss.append(nll_loss.item())
@@ -202,7 +195,6 @@ if __name__ == "__main__":
   model = LatentModel(cfg)
   model = model.to(device)
   print("number of params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
-
   # PREPARE LOADER
   train_loader, val_loader = prepare_dataset(cfg)
   
@@ -220,13 +212,16 @@ if __name__ == "__main__":
   for i in pbar:
 
     # TRAINING
-    avg_con_loss, avg_nll_loss, log_p = train(train_loader, i, model, optimizer, criterion, cfg, n_bins, device)
+    avg_con_loss, avg_nll_loss, log_p, logvars = train(train_loader, i, model, optimizer, criterion, cfg, n_bins, device)
     with torch.no_grad():
       val_con_loss, val_nll_loss = validate(val_loader, model, criterion, cfg, n_bins, device)
     
     # ADJUST LR
     if cfg.LR.ADJUST:
       scheduler.step()
+      # if i > 25:
+      #   scheduler.step()
+        # adjust_learning_rate(cfg, optimizer, epoch)
 
     curr_lr = optimizer.param_groups[0]["lr"] 
 
@@ -243,12 +238,13 @@ if __name__ == "__main__":
     pbar.set_description(
       f"Train NLL Loss: {round(avg_nll_loss, 4):.5f}; Train Con Loss: {round(avg_con_loss, 4)};\
         Val NLL Loss: {round(val_nll_loss, 4)}; Val Con Loss: {round(val_con_loss, 4)}\
-        logP: {log_p.item():.5f}; lr: {curr_lr:.7f}; Min NLL: {round(min_loss, 3)} "
+        logP: {log_p.item():.5f}; lr: {curr_lr:.7f}; Min NLL: {round(min_loss, 3)}"
+        f"logvars: {round(logvars[0].item(), 4), round(logvars[1].item(), 4)}"
       )
     
     writer.add_scalar("Train/Contrastive", round(avg_con_loss, 4), i)
     writer.add_scalar("Train/NLL", round(avg_nll_loss, 4), i)
     writer.add_scalar("Val/Contrastive", round(val_con_loss, 4), i)
     writer.add_scalar("Val/NLL", round(val_nll_loss, 4), i)
-    writer.add_scalar("lr", round(curr_lr, 4), i)
+    writer.add_scalar("lr", round(curr_lr, 7), i)
     

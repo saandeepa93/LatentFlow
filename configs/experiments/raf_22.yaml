@@ -35,8 +35,8 @@ TRAINING:
   PRETRAINED: eff
 
 LR:
-  WARM: True
-  ADJUST: True
+  WARM: False
+  ADJUST: False
   WARM_ITER: 50
   WARMUP_FROM: 1e-6
   DECAY_RATE: 0.1

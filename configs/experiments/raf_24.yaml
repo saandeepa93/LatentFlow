@@ -6,7 +6,7 @@ FLOW:
   N_FLOW: 1
   N_BLOCK: 12
   IN_FEAT: 1280
-  MLP_DIM: 256
+  MLP_DIM: 512
   TEMP: 0.7
   N_SAMPLE: 20
   INIT_ZEROS: False
@@ -35,7 +35,7 @@ TRAINING:
   PRETRAINED: eff
 
 LR:
-  WARM: True
+  WARM: False
   ADJUST: True
   WARM_ITER: 50
   WARMUP_FROM: 1e-6

@@ -25,7 +25,7 @@ DATASET:
 
 TRAINING:
   ITER: 301
-  BATCH: 64
+  BATCH: 128
   LR: 1e-4
   WT_DECAY: 1e-5
   LMBD: 2.
