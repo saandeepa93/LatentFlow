@@ -22,6 +22,14 @@ def bhatta_coeff(z1, z2):
   return 0.5 * (z1 + z2)
 
 
+def label_smooth(target, n_classes: int, label_smoothing=0.1):
+    batch_size = target.size(0)
+    target = torch.unsqueeze(target, 1)
+    soft_target = torch.zeros((batch_size, n_classes), device=target.device)
+    soft_target.scatter_(1, target, 1)
+    soft_target = soft_target * (1 - label_smoothing) + label_smoothing / n_classes
+    return soft_target
+
 class FlowConLoss:
   def __init__(self, cfg, device):
     self.cfg = cfg
@@ -30,8 +38,7 @@ class FlowConLoss:
     self.device = device
     self.n_pixel = cfg.FLOW.IN_FEAT
 
-    self.tau2 = nn.Parameter(torch.tensor(0.33))
-    # self.tau2 = nn.Parameter(torch.tensor(0.33))
+    self.tau2 = nn.Parameter(torch.tensor(1.50))
 
     # RAF12
     self.init_loss = -log(self.n_bins) * self.n_pixel
@@ -73,14 +80,14 @@ class FlowConLoss:
 
   def conLoss(self, log_p_all, labels):
     b, _ = log_p_all.size()
-    # tau = torch.index_select(self.temp, 0, labels)
-    tau = 0.1
     
-    tau2_sin = torch.tensor([0.33, 0.07, 0.07, 0.33, 0.33, 0.33, 0.33], device=self.device)
+    tau = 0.1
+    tau2_sin = torch.tensor([0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1], device=self.device)
     tau2 = torch.index_select(tau2_sin, 0, labels).view(-1, 1).repeat(1, b)
     
     # Create similarity and dissimilarity masks
     off_diagonal = torch.ones((b, b), device=self.device) - torch.eye(b, device=self.device)
+    labels_orig = labels.clone()
     labels = labels.contiguous().view(-1, 1)
     sim_mask = torch.eq(labels, labels.T).float().to(self.device) * off_diagonal
     diff_mask = (1. - sim_mask ) * off_diagonal
@@ -89,16 +96,11 @@ class FlowConLoss:
     diag_logits = (log_p_all * torch.eye(b).to(self.device)).sum(dim=-1)
 
     # Compute pairwise bhatta coeff. (0.5* (8, 8) + (8, 1))
-    # pairwise = (0.5 * (log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1)))
     pairwise = (self.tau2 * log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1))
-    # pairwise = log_p_all.contiguous().view(b, b) + diag_logits.view(b, 1)
-    # pairwise = tau2 * pairwise
 
-    # pairwise = pairwise * off_diagonal
     pairwise_exp = torch.div(torch.exp(
       pairwise - torch.max(pairwise, dim=1, keepdim=True)[0]) + 1e-5, tau)
-    # pairwise_exp = torch.div(torch.exp(pairwise), tau)
-
+    
     pos_count = sim_mask.sum(1)
     pos_count[pos_count == 0] = 1
 
@@ -106,4 +108,10 @@ class FlowConLoss:
 
     # compute mean against positive classes
     mean_log_prob_pos = (sim_mask * log_prob).sum(1) / pos_count
+    
+    # raf_31
+    # sm_label = label_smooth(labels_orig, self.cfg.DATASET.N_CLASS)
+    # sm_mask = (sm_label @ sm_label.T) * off_diagonal
+    # mean_log_prob_pos = (sm_mask * log_prob).sum(1) / pos_count
+
     return -mean_log_prob_pos

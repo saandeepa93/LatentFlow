@@ -102,6 +102,9 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
       exp = exp.repeat(2)
     # with torch.no_grad():
     #   plot_loader_imgs(image, exp, cfg)
+
+    batch_sz = image.size(0)
+    tops = int(batch_sz* 0.7)
     
     image = image.to(device)
     exp = exp.to(device)
@@ -111,6 +114,7 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
 
     # FORWARD 
     z, means, log_sds, sldj, log_vars = model(image)
+
 
     nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
     con_loss = criterion.conLoss(log_p_all, exp)

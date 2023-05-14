@@ -101,26 +101,42 @@ def validate(cfg, loader, n_bins, device):
   mu = torch.load(os.path.join(dist_path, "mu.pt"))
   log_sd = torch.load(os.path.join(dist_path, "log_sd.pt"))
 
+  rank2_dict = {0: [], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[]}
+
   for b, (image, exp, fname) in enumerate(loader,0):
     image = image.to(device)
     exp = exp.type(torch.int64).to(device)
     fname_all += list(fname)
 
     features, *_  = model(image)
-    log_probs = calc_likelihood(cfg, features, mu, log_sd, device, n_pixel)
-    # pred = torch.argmax(log_probs, dim=1).cpu().tolist()
-    _, pred = torch.topk(log_probs, k=2, dim=-1)
-    pred = pred.T
-    target_reshaped = exp.view(1, -1).expand_as(pred)
-    # new_pred = torch.where(pred == target_reshaped, target_reshaped, pred)[1]
-    new_pred = torch.where((pred == target_reshaped).any(dim=0), target_reshaped, pred)[0]
+    log_probs = F.softmax(calc_likelihood(cfg, features, mu, log_sd, device, n_pixel), dim=-1)
     
-    y_val_pred += new_pred.cpu().tolist()
+    pred = torch.argmax(log_probs, dim=1)
+    
+    # probs, pred = torch.topk(log_probs, k=2, dim=-1)
+    # pred = pred.T
+    # target_reshaped = exp.view(1, -1).expand_as(pred)
+    # new_pred = torch.where((pred == target_reshaped).any(dim=0), target_reshaped, pred)[0]
+
+    # rank2_ind = torch.where((pred == target_reshaped)[1, :])[0]
+    # rank2_probs = torch.index_select(probs[:, 1].cpu(), dim=0, index=rank2_ind.cpu())
+    # rank2_cls_ind = torch.index_select(exp, dim=0, index=rank2_ind)
+
+    # for ind, prob in zip(rank2_cls_ind, rank2_probs):
+    #   rank2_dict[ind.cpu().item()].append(prob.cpu().item())
+
+    y_val_pred += pred.cpu().tolist()
     y_val_true += list(exp.cpu())
 
   
   val_acc, _, val_conf = get_metrics(y_val_true, y_val_pred)
   class_wise_acc = val_conf.diagonal()/val_conf.sum(axis=1)
+
+  # for key, item in rank2_dict.items():
+  #   if len(item) > 0:
+  #     avg_item = sum(item)/len(item)
+  #     ic(key, avg_item)
+  # print("-"*40)
   return val_acc, val_conf, class_wise_acc
 
 

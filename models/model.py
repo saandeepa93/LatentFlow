@@ -19,9 +19,12 @@ class LatentModel(nn.Module):
 
     # BACKBONE
     if cfg.TRAINING.PRETRAINED == "eff":
-      self.backbone = timm.create_model('tf_efficientnet_b0_ns', pretrained=False)
+      # self.backbone = timm.create_model('tf_efficientnet_b0_ns', pretrained=False)
+      # self.backbone.classifier = nn.Identity()
+      # self.backbone.load_state_dict(torch.load('./checkpoints/state_vggface2_enet0_new.pt', map_location=torch.device('cpu')))
+      # self.backbone = torch.load("./checkpoints/enet_b0_7.pt")
+      self.backbone = torch.load("./checkpoints/enet_b0_8_best_vgaf.pt")
       self.backbone.classifier = nn.Identity()
-      self.backbone.load_state_dict(torch.load('./checkpoints/state_vggface2_enet0_new.pt', map_location=torch.device('cpu')))
     # 
     elif cfg.TRAINING.PRETRAINED == "eff2":
       self.backbone = timm.create_model('tf_efficientnet_b2_ns', pretrained=False)
@@ -63,16 +66,15 @@ class LatentModel(nn.Module):
       # self.backbone = resnet18("")
       resnet = models.resnet18(True)
       self.backbone = nn.Sequential(*list(resnet.children())[:-1])
-      # msceleb_model = torch.load('./checkpoints/pretrained/Resnet18_MS1M_pytorch.pth.tar')
-      # state_dict = msceleb_model['state_dict']
-      # self.backbone.load_state_dict(state_dict, strict=False)
+      msceleb_model = torch.load('./checkpoints/pretrained/Resnet18_MS1M_pytorch.pth.tar')
+      state_dict = msceleb_model['state_dict']
+      self.backbone.load_state_dict(state_dict, strict=False)
 
-    # # FREEZE BACKBONE
+    # FREEZE BACKBONE
     for param in self.backbone.parameters():
         param.requires_grad=False
     self.backbone.eval()
 
-    
     # FLOW MODEL
     self.flow = RealNVPTabular(in_dim=cfg.FLOW.IN_FEAT, hidden_dim=cfg.FLOW.MLP_DIM, num_layers=cfg.FLOW.N_FLOW, \
                     num_coupling_layers=cfg.FLOW.N_BLOCK, init_zeros=cfg.FLOW.INIT_ZEROS, dropout=cfg.TRAINING.DROPOUT)

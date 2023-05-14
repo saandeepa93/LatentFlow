@@ -83,6 +83,8 @@ class RafDb(Dataset):
         A.RandomResizedCrop(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, scale=(0.5, 1.), p=trans_probs[i]),
         #UPDATED
         A.Rotate(p=trans_probs[i]),
+        A.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225]),
         ToTensorV2()
         ], 
         p=1)
@@ -100,6 +102,8 @@ class RafDb(Dataset):
 
     val_transforms = A.Compose([
       A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
+      A.Normalize(mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]),
       ToTensorV2()
       ], 
       p=1)
