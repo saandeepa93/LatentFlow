@@ -24,6 +24,7 @@ class LatentModel(nn.Module):
       # self.backbone.load_state_dict(torch.load('./checkpoints/state_vggface2_enet0_new.pt', map_location=torch.device('cpu')))
       # self.backbone = torch.load("./checkpoints/enet_b0_7.pt")
       self.backbone = torch.load("./checkpoints/enet_b0_8_best_vgaf.pt")
+      # self.backbone = torch.load("./checkpoints/enet_b0_8_best_afew.pt")
       self.backbone.classifier = nn.Identity()
     # 
     elif cfg.TRAINING.PRETRAINED == "eff2":
