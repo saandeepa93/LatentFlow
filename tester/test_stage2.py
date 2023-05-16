@@ -200,6 +200,7 @@ if __name__ == "__main__":
   model = model.to(device)
   checkpoint = torch.load(f"./checkpoints/{args.config}_model_final.pt", map_location=device)
   model.load_state_dict(checkpoint)
+  model.eval()
   print("Total Trainable Parameters: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
   # PREPARE LOADER

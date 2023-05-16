@@ -27,7 +27,7 @@ TRAINING:
   ITER: 301
   BATCH: 64
   LR: 1e-4
-  WT_DECAY: 1e-2
+  WT_DECAY: 1e-5
   LMBD: 2.
   DROPOUT: False
   TEMP: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]

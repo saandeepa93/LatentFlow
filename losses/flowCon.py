@@ -38,7 +38,7 @@ class FlowConLoss:
     self.device = device
     self.n_pixel = cfg.FLOW.IN_FEAT
 
-    self.tau2 = nn.Parameter(torch.tensor(1.50))
+    self.tau2 = nn.Parameter(torch.tensor(1.5))
 
     # RAF12
     self.init_loss = -log(self.n_bins) * self.n_pixel

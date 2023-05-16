@@ -123,29 +123,16 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
     # loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
     pre1 = torch.exp(-log_vars[0])
     pre2 = torch.exp(-log_vars[1])
-    loss = ((pre1) * con_loss_mean) + ((pre2) * nll_loss) + (log_vars[0] + log_vars[1])
+    loss = ((pre1) * con_loss_mean) + ((pre2 * 2.) * nll_loss) + (log_vars[0] + log_vars[1])
 
     with torch.no_grad():
       avg_con_loss += con_loss.tolist()
       avg_nll_loss.append(nll_loss.item())
 
-    if robust:
-      #optimizer.zero_grad()
-      loss.backward()
-      optimizer.first_step(zero_grad=True)
-      # second forward-backward pass
-      nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
-      con_loss = criterion.conLoss(log_p_all, exp)
-      con_loss_mean = con_loss.mean()
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
   
-      loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
-      loss.backward()
-      optimizer.second_step(zero_grad=True)
-    else:
-      optimizer.zero_grad()
-      loss.backward()
-      optimizer.step()
-    
   avg_con_loss = sum(avg_con_loss)/len(avg_con_loss)
   avg_nll_loss = sum(avg_nll_loss)/len(avg_nll_loss)
   # avg_con_loss = -1
@@ -232,6 +219,7 @@ if __name__ == "__main__":
     # BEST MODEL
     if val_con_loss < min_loss:
       min_loss = val_con_loss
+      best_epoch = i
       torch.save(model.state_dict(), f"checkpoints/{args.config}_model_final.pt")
 
     # SAVE MODEL EVERY k EPOCHS
@@ -242,7 +230,7 @@ if __name__ == "__main__":
     pbar.set_description(
       f"Train NLL Loss: {round(avg_nll_loss, 4):.5f}; Train Con Loss: {round(avg_con_loss, 4)};\
         Val NLL Loss: {round(val_nll_loss, 4)}; Val Con Loss: {round(val_con_loss, 4)}\
-        logP: {log_p.item():.5f}; lr: {curr_lr:.7f}; Min NLL: {round(min_loss, 3)}"
+        logP: {log_p.item():.5f}; lr: {curr_lr:.7f}; Min NLL: {round(min_loss, 3)} ({best_epoch})"
         f"logvars: {round(logvars[0].item(), 4), round(logvars[1].item(), 4)}"
       )
     

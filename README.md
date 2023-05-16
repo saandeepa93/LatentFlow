@@ -3,7 +3,7 @@ SETUP: usual loader, no preprocessing of input. Tau 0.33. Trick is to reduce num
 
 BEST: raf_33 
 SETUP: 1.5 tau2, pretrained enet_b0_7, normalization loader, good average accuracy ~80, 557
-SETUP: 1.5 tau2, pretrained enet_b0_8_AFEW, normalization loader, worse average accuracy ~78, 545
+SETUP: 1.5 tau2, pretrained enet_b0_8_best_vgaf, normalization loader, worse average accuracy ~78, 545
 
 ic| res2: (0.873,
 array([[282,   17,    2,    6,    4,    3,   13],
@@ -31,7 +31,8 @@ ic| res2: (0.865,
 
 
 RAF_34
-SETUP: 1.5 tau2, 0.07 tau, pretrained enet_b0_8_VGAF, normalization loader, average accuracy ~78.6, 549
+SETUP: 1.5 tau2, 0.07 tau, pretrained enet_b0_8_AFEW, normalization loader, average accuracy ~78.6, 549
+
 res2: (0.872,
            array([[ 286,    4,    0,   12,    4,    4,   19],
                  [  17,   38,    0,    4,    7,    5,    3],
@@ -44,7 +45,47 @@ res2: (0.872,
                  0.84567901, 0.86323529]))
 
 
+RAF 35
+SETUP: 1.5 tau2, pretrained enet_b0_8_best_vgaf, normalization loader, no randomscale, only perspective 
+res2: (0.875,
+           array([[ 295,    5,    0,    4,    3,    5,   17],
+                 [  16,   35,    1,    4,   10,    6,    2],
+                 [   3,    0,   86,   14,   25,   14,   18],
+                 [   4,    1,    2, 1125,    5,   12,   36],
+                 [   5,    5,    9,   12,  414,    1,   32],
+                 [   2,    1,    6,    2,    4,  142,    5],
+                 [  18,    0,   10,   25,   38,    2,  587]]),
+           array([0.89665653, 0.47297297, 0.5375    , 0.94936709, 0.86610879,
+                 0.87654321, 0.86323529]))
 
+
+
+**SOTA**
+```
+RAF 41
+Stage2 with likelihood
+ic| res2: (0.877,
+           array([[ 289,    6,    4,    5,    5,    3,   17],
+                 [  17,   40,    2,    3,    5,    6,    1],
+                 [   2,    0,  109,   10,   13,    8,   18],
+                 [   5,    2,    1, 1110,    8,    6,   53],
+                 [   4,    3,   14,   13,  416,    2,   26],
+                 [   1,    1,   10,    5,    3,  136,    6],
+                 [  17,    0,   16,   14,   41,    1,  591]]),
+           array([0.87841945, 0.54054054, 0.68125   , 0.93670886, 0.87029289,
+                 0.83950617, 0.86911765]))
+
+
+stage2 with training.
+ic| val_conf: array([[ 280,   16,    3,    3,    5,    1,   15],
+                     [   8,   41,    0,    3,    2,    2,    0],
+                     [   3,    2,   95,    1,   10,    6,    6],
+                     [   7,    2,   13, 1120,   11,    6,   19],
+                     [   6,    6,   16,    9,  420,    3,   34],
+                     [   6,    6,   11,    6,    4,  139,    1],
+                     [  19,    1,   22,   43,   26,    5,  605]])
+train_loss: 4.2084; train_acc: 0.908;val_loss: 4.53; val_acc: 0.869;best_acc: 0.88;
+```
 *****************************************************************************************************
 
 

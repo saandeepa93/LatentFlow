@@ -152,7 +152,7 @@ if __name__ == "__main__":
   checkpoint = torch.load(f"./checkpoints/{args.config}_model_final.pt", map_location=device)
   model.load_state_dict(checkpoint)
   print("Total Trainable Parameters: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
-
+  model.eval()
   # NLL & CONTRASTIVE LOSS
   criterion = FlowConLoss(cfg, device)
 
