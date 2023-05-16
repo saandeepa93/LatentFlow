@@ -13,6 +13,7 @@ sys.path.append('.')
 import os
 import random
 import numpy as np
+from collections import Counter
 from sys import exit as e
 from tqdm import tqdm
 from math import log, sqrt, pi, cos
@@ -25,7 +26,7 @@ import pickle
 from sklearn import datasets
 
 from models import LatentModel
-from utils import plot_umap, gaussian_log_p, gaussian_sample, get_args, seed_everything
+from utils import plot_umap, gaussian_log_p, gaussian_sample, get_args, seed_everything, plot_loader_imgs
 from configs import get_cfg_defaults
 from loaders import CustomDataset, AffectDataset, RafDb
 from losses import FlowConLoss
@@ -63,8 +64,17 @@ def prepare_dataset(cfg):
   
   elif cfg.DATASET.DS_NAME == "AFF":
     train_dataset = AffectDataset(cfg, "train")
-    train_loader = DataLoader(train_dataset, batch_size=cfg.TRAINING.BATCH, shuffle=True, \
-      num_workers=cfg.DATASET.NUM_WORKERS)
+    if cfg.DATASET.W_SAMPLER:
+      class_freq = np.array(list(train_dataset.cnt_dict.values()))
+      weight = 1./class_freq
+      sample_weight = torch.tensor([weight[t] for t in train_dataset.all_labels])
+      sampler = WeightedRandomSampler(sample_weight.type('torch.DoubleTensor'), len(sample_weight))
+      train_loader = DataLoader(train_dataset, batch_size=cfg.TRAINING.BATCH, shuffle=False, \
+        sampler=sampler, num_workers=cfg.DATASET.NUM_WORKERS)
+    else:
+      train_loader = DataLoader(train_dataset, batch_size=cfg.TRAINING.BATCH, shuffle=True, \
+        num_workers=cfg.DATASET.NUM_WORKERS)
+
     val_dataset = AffectDataset(cfg, "val")
     val_loader = DataLoader(val_dataset, batch_size=cfg.TRAINING.BATCH, shuffle=True, \
       num_workers=cfg.DATASET.NUM_WORKERS)
@@ -97,15 +107,9 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
   robust = False
   model.train()
   for b, (image, exp, _) in enumerate(loader,0):
-    if cfg.DATASET.AUG2:
-      image = torch.cat(image, dim=0)
-      exp = exp.repeat(2)
+    # ic(Counter(exp.tolist()))
     # with torch.no_grad():
     #   plot_loader_imgs(image, exp, cfg)
-
-    batch_sz = image.size(0)
-    tops = int(batch_sz* 0.7)
-    
     image = image.to(device)
     exp = exp.to(device)
 
@@ -115,7 +119,7 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
     # FORWARD 
     z, means, log_sds, sldj, log_vars = model(image)
 
-
+    # LOSS
     nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
     con_loss = criterion.conLoss(log_p_all, exp)
     con_loss_mean = con_loss.mean()
@@ -123,7 +127,7 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
     # loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
     pre1 = torch.exp(-log_vars[0])
     pre2 = torch.exp(-log_vars[1])
-    loss = ((pre1) * con_loss_mean) + ((pre2 * 2.) * nll_loss) + (log_vars[0] + log_vars[1])
+    loss = ((pre1) * con_loss_mean) + ((pre2 * 0.3) * nll_loss) + (log_vars[0] + log_vars[1])
 
     with torch.no_grad():
       avg_con_loss += con_loss.tolist()
@@ -171,7 +175,8 @@ if __name__ == "__main__":
   print("GPU: ", torch.cuda.is_available())
 
   args = get_args()
-  config_path = os.path.join("./configs/experiments", f"{args.config}.yaml")
+  db = args.config.split("_")[0]
+  config_path = os.path.join(f"./configs/experiments/{db}", f"{args.config}.yaml")
 
   # SET TENSORBOARD PATH
   writer = SummaryWriter(f'./runs/{args.config}')

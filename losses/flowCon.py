@@ -82,8 +82,6 @@ class FlowConLoss:
     b, _ = log_p_all.size()
     
     tau = 0.1
-    tau2_sin = torch.tensor([0.1, 0.1, 0.05, 0.1, 0.1, 0.1, 0.1], device=self.device)
-    tau2 = torch.index_select(tau2_sin, 0, labels).view(-1, 1).repeat(1, b)
     
     # Create similarity and dissimilarity masks
     off_diagonal = torch.ones((b, b), device=self.device) - torch.eye(b, device=self.device)
@@ -109,9 +107,4 @@ class FlowConLoss:
     # compute mean against positive classes
     mean_log_prob_pos = (sim_mask * log_prob).sum(1) / pos_count
     
-    # raf_31
-    # sm_label = label_smooth(labels_orig, self.cfg.DATASET.N_CLASS)
-    # sm_mask = (sm_label @ sm_label.T) * off_diagonal
-    # mean_log_prob_pos = (sm_mask * log_prob).sum(1) / pos_count
-
     return -mean_log_prob_pos

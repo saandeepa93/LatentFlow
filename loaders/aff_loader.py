@@ -35,16 +35,16 @@ class AffectDataset(Dataset):
     self.root_dir = root_dir
 
     # Private dicts
-    self.label_dict = {"Neutral": 0, "Happiness":1, "Sadness":2, "Surprise":3, "Fear":4, "Disgust":5, "Anger":6}
-    self.label_dict_inverse = {0: "Neutral", 1: "Happiness", 2: "Sadness", 3: "Surprise", 4: "Fear", 5: "Disgust", 6: "Anger"}
-    self.cnt_dict = {0: 0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0}
-    self.allowed_labels = [0, 1, 2, 3, 4, 5, 6]
+    self.label_dict = {"Neutral": 0, "Happiness":1, "Sadness":2, "Surprise":3, "Fear":4, "Disgust":5, "Anger":6, "Contempt": 7}
+    self.label_dict_inverse = {0: "Neutral", 1: "Happiness", 2: "Sadness", 3: "Surprise", 4: "Fear", 5: "Disgust", 6: "Anger", 7: "Contempt"}
+    self.cnt_dict = {0: 0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0}
+    self.allowed_labels = [0, 1, 2, 3, 4, 5, 6, 7]
     self.all_files_dict = self.__getAllFiles__()
 
     self.all_files = list(self.all_files_dict.keys())
     self.alb_train, self.alb_val = self.get_augmentation()
-    all_labels = list(self.all_files_dict.values())
-    ic(Counter(all_labels))
+    self.all_labels = list(self.all_files_dict.values())
+    ic(Counter(self.all_labels))
   
 
   def __getAllFiles__(self):
@@ -68,18 +68,24 @@ class AffectDataset(Dataset):
 
   def get_augmentation(self):
     train_transform_dict = {}
-    trans_probs = [0.5, 1., 0.7, 0.2, 0.2, 0.7, 0.5]
+    trans_probs = [0.5, 1., 0.7, 0.2, 0.2, 0.7, 0.5, 0.7]
     for i in range(self.cfg.DATASET.N_CLASS):
       train_transform_dict[i] = A.Compose([
         A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
         A.HorizontalFlip(p=trans_probs[i]),
         A.GaussianBlur(p=trans_probs[i]),
+        A.Perspective(p=trans_probs[i]),
+        A.Rotate(p=trans_probs[i]),
+        A.Normalize(mean=[0.485, 0.456, 0.406],
+          std=[0.229, 0.224, 0.225]),
         ToTensorV2()
         ], 
         p=1)
 
     val_transforms = A.Compose([
       A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
+      A.Normalize(mean=[0.485, 0.456, 0.406],
+        std=[0.229, 0.224, 0.225]),
       ToTensorV2()
       ], 
       p=1)

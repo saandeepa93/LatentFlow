@@ -183,7 +183,8 @@ if __name__ == "__main__":
   print("GPU: ", torch.cuda.is_available())
 
   args = get_args()
-  config_path = os.path.join("./configs/experiments", f"{args.config}.yaml")
+  db = args.config.split("_")[0]
+  config_path = os.path.join(f"./configs/experiments/{db}", f"{args.config}.yaml")
 
   # LOAD CONFIGURATION
   cfg = get_cfg_defaults()

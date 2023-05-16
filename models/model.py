@@ -11,6 +11,7 @@ from icecream import ic
 from .realnvp import RealNVPTabular
 from .inception_v1 import InceptionResnetV1
 from .resnet import resnet18
+from .vgg import VGG
 
 class LatentModel(nn.Module):
   def __init__(self, cfg):
@@ -19,13 +20,19 @@ class LatentModel(nn.Module):
 
     # BACKBONE
     if cfg.TRAINING.PRETRAINED == "eff":
-      # self.backbone = timm.create_model('tf_efficientnet_b0_ns', pretrained=False)
-      # self.backbone.classifier = nn.Identity()
-      # self.backbone.load_state_dict(torch.load('./checkpoints/state_vggface2_enet0_new.pt', map_location=torch.device('cpu')))
-      # self.backbone = torch.load("./checkpoints/enet_b0_7.pt")
-      self.backbone = torch.load("./checkpoints/enet_b0_8_best_vgaf.pt")
-      # self.backbone = torch.load("./checkpoints/enet_b0_8_best_afew.pt")
+      self.backbone = timm.create_model('tf_efficientnet_b0_ns', pretrained=False)
       self.backbone.classifier = nn.Identity()
+      self.backbone.load_state_dict(torch.load('./checkpoints/state_vggface2_enet0_new.pt', map_location=torch.device('cpu')))
+      # self.backbone = torch.load("./checkpoints/enet_b0_7.pt")
+      # self.backbone = torch.load("./checkpoints/enet_b0_8_best_vgaf.pt")
+      # self.backbone = torch.load("./checkpoints/enet_b0_8_best_afew.pt")
+      # self.backbone.classifier = nn.Identity()
+    
+    elif cfg.TRAINING.PRETRAINED == "vgg":
+      self.backbone = VGG('VGG19')
+      checkpoint = torch.load('./checkpoints/PrivateTest_model.t7')
+      self.backbone.load_state_dict(checkpoint['net'])
+      self.backbone.classifier=nn.Identity()
     # 
     elif cfg.TRAINING.PRETRAINED == "eff2":
       self.backbone = timm.create_model('tf_efficientnet_b2_ns', pretrained=False)
