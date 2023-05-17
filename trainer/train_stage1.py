@@ -127,7 +127,7 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
     # loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
     pre1 = torch.exp(-log_vars[0])
     pre2 = torch.exp(-log_vars[1])
-    loss = ((pre1) * con_loss_mean) + ((pre2 * 0.3) * nll_loss) + (log_vars[0] + log_vars[1])
+    loss = ((pre1) * con_loss_mean) + ((pre2) * nll_loss) + (log_vars[0] + log_vars[1])
 
     with torch.no_grad():
       avg_con_loss += con_loss.tolist()

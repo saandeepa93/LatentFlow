@@ -1,10 +1,10 @@
-BEST CONFIG - RAF_13
+<!-- BEST CONFIG - RAF_13
 SETUP: usual loader, no preprocessing of input. Tau 0.33. Trick is to reduce num_blocks and increase num_coupling
 
 BEST: raf_33 
 SETUP: 1.5 tau2, pretrained enet_b0_7, normalization loader, good average accuracy ~80, 557
-SETUP: 1.5 tau2, pretrained enet_b0_8_best_vgaf, normalization loader, worse average accuracy ~78, 545
-
+SETUP: 1.5 tau2, pretrained enet_b0_8_best_vgaf, normalization loader, worse average accuracy ~78, 545 -->
+<!-- 
 ic| res2: (0.873,
 array([[282,   17,    2,    6,    4,    3,   13],
                      [   4,   34,    0,    5,    0,    2,    0],
@@ -56,11 +56,10 @@ res2: (0.875,
                  [   2,    1,    6,    2,    4,  142,    5],
                  [  18,    0,   10,   25,   38,    2,  587]]),
            array([0.89665653, 0.47297297, 0.5375    , 0.94936709, 0.86610879,
-                 0.87654321, 0.86323529]))
+                 0.87654321, 0.86323529])) -->
 
+<!-- 
 
-
-**SOTA**
 ```
 RAF 41
 Stage2 with likelihood
@@ -85,10 +84,29 @@ ic| val_conf: array([[ 280,   16,    3,    3,    5,    1,   15],
                      [   6,    6,   11,    6,    4,  139,    1],
                      [  19,    1,   22,   43,   26,    5,  605]])
 train_loss: 4.2084; train_acc: 0.908;val_loss: 4.53; val_acc: 0.869;best_acc: 0.88;
+``` -->
+
+
+
+**SOTA**
 ```
+RAF 44
+Stage2 with likelihood
+ic| res2: (0.919,
+           array([[ 303,    3,    1,    3,    4,    6,    9],
+                 [   8,   52,    0,    5,    5,    3,    1],
+                 [   4,    1,  112,   12,   10,    7,   14],
+                 [   7,    4,    5, 1141,    7,    7,   14],
+                 [   9,    6,    6,   16,  423,    7,   11],
+                 [   4,    1,    6,    4,    1,  140,    6],
+                 [   9,    1,    7,    2,    9,    4,  648]]),
+           array([0.92097264, 0.7027027 , 0.7       , 0.9628692 , 0.88493724,
+                 0.86419753, 0.95294118]))
+```
+
 *****************************************************************************************************
 
-
+<!-- 
 
 
 ic| res2: (0.86,
@@ -114,4 +132,4 @@ ic| res2: (0.86,
                      [   3,    4,    8,    6,    1,  126,    3],
                      [  12,    1,   22,   36,   20,    5,  575]])
            array([0.9027, 0.50, 0.6312, 0.9316 , 0.9016,
-                 0.7777, 0.8455]))
+                 0.7777, 0.8455])) -->

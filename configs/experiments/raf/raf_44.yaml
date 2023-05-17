@@ -4,7 +4,7 @@ PATHS:
 
 FLOW:
   N_FLOW: 1
-  N_BLOCK: 6
+  N_BLOCK: 24
   IN_FEAT: 1280
   MLP_DIM: 256
   TEMP: 0.7
@@ -25,7 +25,7 @@ DATASET:
 
 TRAINING:
   ITER: 301
-  BATCH: 64
+  BATCH: 128
   LR: 1e-4
   WT_DECAY: 1e-5
   LMBD: 2.

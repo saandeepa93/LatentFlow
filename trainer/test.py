@@ -154,7 +154,8 @@ if __name__ == "__main__":
   print("GPU: ", torch.cuda.is_available())
 
   args = get_args()
-  config_path = os.path.join("./configs/experiments", f"{args.config}.yaml")
+  db = args.config.split("_")[0]
+  config_path = os.path.join(f"./configs/experiments/{db}", f"{args.config}.yaml")
 
   # SET TENSORBOARD PATH
   # writer = SummaryWriter(f'./runs/{args.config}')
@@ -171,6 +172,7 @@ if __name__ == "__main__":
   model = model.to(device)
 
   print("number of params: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
+  e()
   # PREPARE LOADER
   train_loader, val_loader = prepare_dataset(cfg)
   
@@ -209,6 +211,7 @@ if __name__ == "__main__":
     if val_acc > best_acc:
       min_loss = val_loss
       best_acc = val_acc
+      torch.save(model.state_dict(), f"checkpoints/{args.config}_model_backbone.pt")
       ic(val_conf)
 
     # SAVE MODEL EVERY k EPOCHS

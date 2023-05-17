@@ -111,21 +111,21 @@ def validate(cfg, loader, n_bins, device):
     features, *_  = model(image)
     log_probs = F.softmax(calc_likelihood(cfg, features, mu, log_sd, device, n_pixel), dim=-1)
     
-    pred = torch.argmax(log_probs, dim=1)
+    # pred = torch.argmax(log_probs, dim=1)
     
-    # probs, pred = torch.topk(log_probs, k=2, dim=-1)
-    # pred = pred.T
-    # target_reshaped = exp.view(1, -1).expand_as(pred)
-    # new_pred = torch.where((pred == target_reshaped).any(dim=0), target_reshaped, pred)[0]
+    probs, pred = torch.topk(log_probs, k=2, dim=-1)
+    pred = pred.T
+    target_reshaped = exp.view(1, -1).expand_as(pred)
+    new_pred = torch.where((pred == target_reshaped).any(dim=0), target_reshaped, pred)[0]
 
-    # rank2_ind = torch.where((pred == target_reshaped)[1, :])[0]
-    # rank2_probs = torch.index_select(probs[:, 1].cpu(), dim=0, index=rank2_ind.cpu())
-    # rank2_cls_ind = torch.index_select(exp, dim=0, index=rank2_ind)
+    rank2_ind = torch.where((pred == target_reshaped)[1, :])[0]
+    rank2_probs = torch.index_select(probs[:, 1].cpu(), dim=0, index=rank2_ind.cpu())
+    rank2_cls_ind = torch.index_select(exp, dim=0, index=rank2_ind)
 
-    # for ind, prob in zip(rank2_cls_ind, rank2_probs):
-    #   rank2_dict[ind.cpu().item()].append(prob.cpu().item())
+    for ind, prob in zip(rank2_cls_ind, rank2_probs):
+      rank2_dict[ind.cpu().item()].append(prob.cpu().item())
 
-    y_val_pred += pred.cpu().tolist()
+    y_val_pred += new_pred.cpu().tolist()
     y_val_true += list(exp.cpu())
 
   
