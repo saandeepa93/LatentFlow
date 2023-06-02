@@ -42,6 +42,8 @@ LR:
   MIN_LR: 1e-6
   T_MAX: 100
 
+TESTING:
+  RANK2: False
 
 COMMENTS:
   New = enet_b0_8_best_vgaf. no Random Cropping. Perspective used instead. add 2.0 lmbda for nll

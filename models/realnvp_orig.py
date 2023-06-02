@@ -9,6 +9,85 @@ from sys import exit as e
 
 
 
+class AffineConstantFlow(nn.Module):
+    """ 
+    Scales + Shifts the flow by (learned) constants per dimension.
+    In NICE paper there is a Scaling layer which is a special case of this where t is None
+    """
+    def __init__(self, dim, scale=True, shift=True):
+        super().__init__()
+        self.s = nn.Parameter(torch.randn(1, dim, requires_grad=True)) if scale else None
+        self.t = nn.Parameter(torch.randn(1, dim, requires_grad=True)) if shift else None
+        
+    def forward(self, x):
+        s = self.s if self.s is not None else x.new_zeros(x.size())
+        t = self.t if self.t is not None else x.new_zeros(x.size())
+        z = x * torch.exp(s) + t
+        log_det = torch.sum(s, dim=1)
+        return z, log_det
+    
+    def inverse(self, z):
+        s = self.s if self.s is not None else z.new_zeros(z.size())
+        t = self.t if self.t is not None else z.new_zeros(z.size())
+        x = (z - t) * torch.exp(-s)
+        log_det = torch.sum(-s, dim=1)
+        return x
+
+
+class ActNorm(AffineConstantFlow):
+    """
+    Really an AffineConstantFlow but with a data-dependent initialization,
+    where on the very first batch we clever initialize the s,t so that the output
+    is unit gaussian. As described in Glow paper.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.data_dep_init_done = False
+    
+    def forward(self, x):
+        # first batch is used for init
+        if not self.data_dep_init_done:
+            assert self.s is not None and self.t is not None # for now
+            self.s.data = (-torch.log(x.std(dim=0, keepdim=True))).detach()
+            self.t.data = (-(x * torch.exp(self.s)).mean(dim=0, keepdim=True)).detach()
+            self.data_dep_init_done = True
+        return super().forward(x)
+
+class Invertible1x1Conv(nn.Module):
+    """ 
+    As introduced in Glow paper.
+    """
+    
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+        Q = torch.nn.init.orthogonal_(torch.randn(dim, dim)).to(device)
+        P, L, U = torch.lu_unpack(*Q.lu())
+        self.P = P # remains fixed during optimization
+        self.L = nn.Parameter(L) # lower triangular portion
+        self.S = nn.Parameter(U.diag()) # "crop out" the diagonal to its own parameter
+        self.U = nn.Parameter(torch.triu(U, diagonal=1)) # "crop out" diagonal, stored in S
+
+    def _assemble_W(self):
+        """ assemble W from its pieces (P, L, U, S) """
+        L = torch.tril(self.L, diagonal=-1) + torch.diag(torch.ones(self.dim)).to(self.L.device)
+        U = torch.triu(self.U, diagonal=1)
+        W = self.P @ L @ (U + torch.diag(self.S))
+        return W
+
+    def forward(self, x):
+        W = self._assemble_W()
+        z = x @ W
+        log_det = torch.sum(torch.log(torch.abs(self.S)))
+        return z, log_det
+
+    def inverse(self, z):
+        W = self._assemble_W()
+        W_inv = torch.inverse(W)
+        x = z @ W_inv
+        log_det = -torch.sum(torch.log(torch.abs(self.S)))
+        return x
+
 class iSequential(torch.nn.Sequential):
 
     def inverse(self, y):
@@ -43,6 +122,39 @@ class MaskType(IntEnum):
     Center = 7
 
 
+def checkerboard_mask(dim, reverse, device):
+    mask = torch.zeros((dim), device=device, requires_grad=False)
+    if reverse:
+        mask[::2] = 1
+    else:
+        mask[1::2] = 1
+    return mask.view(1, -1)
+
+class MaskCheckerboard:
+    def __init__(self, reverse_mask):
+        self.type = MaskType.CHECKERBOARD
+        self.reverse_mask = reverse_mask
+
+    def mask(self, x):
+        # self.b = checkerboard_mask(x.size(2), x.size(3), self.reverse_mask, device=x.device)
+        self.b = checkerboard_mask(x.size(1), self.reverse_mask, device=x.device)
+        x_id = x * self.b
+        x_change = x * (1 - self.b)
+        return x_id, x_change
+
+    def unmask(self, x_id, x_change):
+        return x_id * self.b + x_change * (1 - self.b)
+    
+    def mask_st_output(self, s, t):
+        return s * (1 - self.b), t * (1 - self.b)
+
+    def get_valid_half(self, x):
+        if self.reverse_mask:
+            return x[:, 1::2]
+        else:
+            return x[:, ::2]
+
+
 class MaskTabular:
     def __init__(self, reverse_mask):
         self.type = MaskType.TABULAR
@@ -74,7 +186,7 @@ class MaskTabular:
     def get_valid_half(self, x):
       dim = x.size(1)
       split = dim // 2
-      if self.reverse_mask:
+      if not self.reverse_mask:
           return x[:, :split]
       else:
         return x[:, split:]
@@ -116,7 +228,7 @@ class CouplingLayerBase(nn.Module):
            self._logdet = self.mask.reshape_logdet(self._logdet) 
         x = self.mask.unmask(x_id, x_change)
 
-        x_change_valid = self.mask.get_valid_half(x_change)
+        x_change_valid = self.mask.get_valid_half(x_id)
         
         # LEARNED PRIOR
         mean, log_sd = self.prior(x_change_valid).chunk(2, 1)
@@ -151,6 +263,35 @@ class ZeroLinear(nn.Module):
     
     return out
 
+# class ScaleNet(nn.Module):
+#     def __init__(self, in_dim, mid_dim, dropout, num_layers, init_zeros):
+#         super().__init__()
+        
+#         self.dropout_flg = dropout
+#         self.dropout = nn.Dropout(0.5)
+#         self.l1 = nn.Linear(in_dim, mid_dim)
+#         self.silu = nn.SiLU()
+#         self.bn1 = nn.BatchNorm1d(mid_dim)
+#         self.bn2 = nn.BatchNorm1d(in_dim * 2)
+#         self.l2_list = nn.ModuleList()
+#         for _ in range(num_layers):
+#             self.l2_list.append(nn.Linear(mid_dim, mid_dim))
+#         self.last = ZeroLinear(mid_dim, in_dim*2)
+    
+#     def forward(self, x):
+#         x = self.l1(x)
+#         x = self.silu(x)
+#         if self.dropout:
+#             x = self.dropout(x)
+#         for l2 in self.l2_list:
+#             x = l2(x)
+#             x = self.bn1(x)
+#             x = self.silu(x)
+#         x = self.last(x)
+#         x = self.bn2(x)
+#         x = self.silu(x)
+#         return x
+
 class CouplingLayerTabular(CouplingLayerBase):
 
     def __init__(self, in_dim, mid_dim, num_layers, mask, init_zeros=False, dropout=False):
@@ -158,13 +299,13 @@ class CouplingLayerTabular(CouplingLayerBase):
         super(CouplingLayerTabular, self).__init__()
         self.mask = mask
         self.st_net = nn.Sequential(nn.Linear(in_dim, mid_dim),
-                                    nn.ReLU(),
+                                    # nn.ReLU(),
+                                    nn.SiLU(),
                                     nn.Dropout(.5) if dropout else nn.Sequential(),
                                     *self._inner_seq(num_layers, mid_dim),
-                                    # ZeroLinear(mid_dim, in_dim*4)
                                     ZeroLinear(mid_dim, in_dim*2)
-                                    # nn.Linear(mid_dim, in_dim*2)
                                     )
+        # self.st_net = ScaleNet(in_dim, mid_dim, dropout, num_layers, init_zeros)
         self.prior = ZeroLinear(in_dim//2, in_dim*2)
         
         if init_zeros:
@@ -179,7 +320,7 @@ class CouplingLayerTabular(CouplingLayerBase):
         res = []
         for _ in range(num_layers):
             res.append(nn.Linear(mid_dim, mid_dim))
-            res.append(nn.ReLU())
+            res.append(nn.SiLU())
         return res
 
   
@@ -207,17 +348,47 @@ class RealNVPBase(nn.Module):
         nll = -(prior_ll + logdet)
         return nll
 
+class Flow(nn.Module):
+    def __init__(self, in_dim, i, hidden_dim, num_layers, init_zeros, dropout):
+        super().__init__()
+
+        # self.actnorm = ActNorm(in_dim)
+        # self.invconv = Invertible1x1Conv(in_dim)
+        self.coupling = CouplingLayerTabular(
+                    in_dim, hidden_dim, num_layers, \
+                    MaskTabular(reverse_mask=bool(i%2)), \
+                    init_zeros=init_zeros, dropout=dropout
+                    )
+
+    def forward(self, x):
+        # x, det1 = self.actnorm(x)
+        # x, det2 = self.invconv(x)
+        x, mean, log_sd, det3  = self.coupling(x)
+        logdet = det3
+        return x, mean, log_sd, logdet
+    
+    def inverse(self, input):
+        input = self.coupling.inverse(input)
+        # input = self.invconv.inverse(input)
+        # input = self.actnorm.inverse(input)
+        return input
+
 class RealNVPTabular(RealNVPBase):
 
     def __init__(self, in_dim=2, num_coupling_layers=6, hidden_dim=256, 
                  num_layers=2, init_zeros=False, dropout=False):
 
         super(RealNVPTabular, self).__init__()
-
         
-        self.body = iSequential(*[
-                        CouplingLayerTabular(
-                            in_dim, hidden_dim, num_layers, MaskTabular(reverse_mask=bool(i%2)), init_zeros=init_zeros, dropout=dropout)
-                        for i in range(num_coupling_layers)
-                    ])
+        self.body = nn.ModuleList()
+        for i in range(num_coupling_layers):
+            in_dimf = in_dim if i == 0 else in_dim * 2
+            self.body.append(Flow(in_dimf, i, hidden_dim, num_layers, init_zeros, dropout))
+        
+        # self.body = iSequential(*[
+        #                 CouplingLayerTabular(
+        #                     in_dim, hidden_dim, num_layers, MaskTabular(reverse_mask=bool(i%2)), init_zeros=init_zeros, dropout=dropout)
+        #                     # in_dim, hidden_dim, num_layers, MaskCheckerboard(reverse_mask=bool(i%2)), init_zeros=init_zeros, dropout=dropout)
+        #                 for i in range(num_coupling_layers)
+        #             ])
         

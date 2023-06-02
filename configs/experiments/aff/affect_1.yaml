@@ -1,0 +1,51 @@
+PATHS:
+  DATA_ROOT: /data/dataset/AffectNet
+  VIS_PATH: ./sample/plots/AFF
+
+FLOW:
+  N_FLOW: 6
+  N_BLOCK: 4
+  N_CHAN: 3
+  MLP_DIM: 512
+  N_BITS: 5
+  TEMP: 0.7
+  N_SAMPLE: 20
+
+DATASET:
+  DS_NAME: AFF
+  N_CLASS: 7
+  IMG_SIZE: 64
+  NUM_WORKERS: 6
+  TEST: M0008
+  COUNT: 25000
+  N_VIEWS: 2
+  AUG: True
+  AUG2: False
+  W_SAMPLER: True
+
+LOSS:
+  LAMBDA: 0.0051
+
+TRAINING:
+  ITER: 701
+  BATCH: 128
+  LR: 1e-4
+  WT_DECAY: 1e-2
+  LMBD: 2.
+  OUTPUT_DIM: 1536
+  DROPOUT: 0.2
+  TEMP: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+
+LR:
+  WARM: True
+  WARM_ITER: 100
+  WARMUP_FROM: 1e-6
+  ADJUST: False
+  DECAY_RATE: 0.1
+  MIN_LR: 1e-6
+  T_MAX: 100
+
+COMMENTS:
+  Affectnet initial experiment
+
+  

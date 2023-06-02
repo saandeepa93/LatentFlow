@@ -17,7 +17,7 @@ DATASET:
   IMG_SIZE: 224
   NUM_WORKERS: 2
   TEST: M0008
-  COUNT: 5000
+  COUNT: 10000
   N_VIEWS: 2
   AUG: True
   AUG2: False
@@ -25,11 +25,11 @@ DATASET:
 
 TRAINING:
   ITER: 301
-  BATCH: 256
+  BATCH: 128
   LR: 1e-4
   WT_DECAY: 1e-5
   LMBD: 2.
-  DROPOUT: False
+  DROPOUT: True
   TEMP: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   PRETRAINED: eff
 

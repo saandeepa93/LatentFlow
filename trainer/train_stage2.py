@@ -161,21 +161,9 @@ def train(loader, epoch, model, classifier, optimizer, criterion, cfg, device, s
 
     loss = criterion(out, exp, sample_weight)
 
-    if robust:
-      #optimizer.zero_grad()
-      loss.backward()
-      optimizer.first_step(zero_grad=True)
-      # second forward-backward pass
-      with torch.no_grad():
-        z, *_ = model(image)
-      out = classifier(z)
-      loss = criterion(out, exp, sample_weight)
-      loss.backward()
-      optimizer.second_step(zero_grad=True)
-    else:
-      optimizer.zero_grad()
-      loss.backward()
-      optimizer.step()
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
 
     with torch.no_grad():
       avg_loss.append(loss.item())
@@ -283,7 +271,7 @@ if __name__ == "__main__":
       min_loss = val_loss
       best_acc = val_acc
       ic(val_conf)
-      torch.save(model.state_dict(), f"checkpoints/{args.config}_model_final_linear.pt")
+      torch.save(classifier.state_dict(), f"checkpoints/{args.config}_model_final_linear.pt")
 
     # SAVE MODEL EVERY k EPOCHS
     # if i % 200 == 0:

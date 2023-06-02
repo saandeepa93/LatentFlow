@@ -83,9 +83,11 @@ def get_image_tensor(path):
 def get_ll(image, means, log_sds, model):
   # NLL & CONTRASTIVE LOSS
   image = image.type(torch.float32)
-  z, _, _, sldj  = model(image)
-  nll_loss, log_p, log_det, log_p_all = nllLoss(cfg, device, z, sldj, means, log_sds)
-  return log_p_all
+  features, *_  = model(image)
+  log_probs = F.softmax(calc_likelihood(cfg, features, mu, log_sd, device, n_pixel), dim=-1)
+  # z, _, _, sldj  = model(image)
+  # nll_loss, log_p, log_det, log_p_all = nllLoss(cfg, device, z, sldj, means, log_sds)
+  return log_probs
 
 
 
@@ -98,7 +100,8 @@ if __name__ == "__main__":
   print("GPU: ", torch.cuda.is_available())
 
   args = get_args()
-  config_path = os.path.join("./configs/experiments", f"{args.config}.yaml")
+  db = args.config.split("_")[0]
+  config_path = os.path.join(f"./configs/experiments/{db}", f"{args.config}.yaml")
 
   # LOAD CONFIGURATION
   cfg = get_cfg_defaults()
@@ -116,7 +119,7 @@ if __name__ == "__main__":
   # train_image = get_image_tensor("/data/dataset/BU3DFE/M0007/M0007_HA01AE_F2D.bmp")
   # train_image = get_image_tensor("/data/dataset/BU3DFE/F0030/F0030_FE01BL_F2D.bmp")
   
-  train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_06671_aligned.jpg")
+  train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_10584_aligned.jpg")
   train_image = train_image.to(device)
   # train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_08604_aligned.jpg")
   # train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/test_0286_aligned.jpg")
@@ -125,7 +128,6 @@ if __name__ == "__main__":
   log_sds = torch.load(os.path.join(dist_path, "log_sd.pt"))
   mu =  torch.stack(means, dim=0)
   log_sd =  torch.stack(log_sds, dim=0)
-
 
   train_ll = get_ll(train_image, mu, log_sd, model)
   print("-"*40)

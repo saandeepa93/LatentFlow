@@ -9,6 +9,7 @@ import albumentations as A
 from  albumentations.pytorch.transforms import ToTensorV2
 
 import os
+import json
 import re
 import pandas as pd
 import numpy as np
@@ -18,6 +19,10 @@ from icecream import ic
 
 from loaders.utils import GaussianBlur, TwoCropTransform
 
+with open("./data/train_ll.json", 'r') as fp:
+  train_ll = json.load(fp)
+
+ignore_fls = list(train_ll.keys())
 
 class RafDb(Dataset):
   def __init__(self, cfg, mode) -> None:
@@ -52,29 +57,11 @@ class RafDb(Dataset):
     print(self.cnt_dict)
 
 
-  # def get_augmentation(self):
-  #   train_transforms = A.Compose([
-  #     A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
-  #     A.HorizontalFlip(p=0.5),
-  #     A.GaussianBlur(p=0.5),
-  #     A.Rotate(p=0.5),
-  #     A.RandomResizedCrop(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, scale=(0.5, 1.), p=0.5),
-  #     # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), p=1),
-  #     ToTensorV2()
-  #     ], 
-  #     p=1)
-  #   val_transforms = A.Compose([
-  #     A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
-  #     # A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), p=1),
-  #     ToTensorV2()
-  #     ], 
-  #     # keypoints_params = A.KeypointParams(format='xy'), 
-  #     p=1)
-  #   return train_transforms, val_transforms, None
   
   def get_augmentation(self):
     train_transform_dict = {}
-    trans_probs = [0.5, 0.8, 0.8, 0.5, 0.5, 0.5, 0.5]
+    # trans_probs = [0.5, 0.8, 0.8, 0.5, 0.5, 0.5, 0.5]
+    trans_probs = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
     for i in range(self.cfg.DATASET.N_CLASS):
       train_transform_dict[self.allowed_labels[i]] = A.Compose([
         A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
@@ -82,6 +69,7 @@ class RafDb(Dataset):
         A.GaussianBlur(p=trans_probs[i]),
         # A.RandomResizedCrop(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, scale=(0.5, 1.), p=trans_probs[i]),
         #UPDATED
+        # A.ZoomBlur(p=trans_probs[i]),
         A.Perspective(p=trans_probs[i]),
         A.Rotate(p=trans_probs[i]),
         A.Normalize(mean=[0.485, 0.456, 0.406],
@@ -126,6 +114,8 @@ class RafDb(Dataset):
       label = self.label_dict[expr]
       
       # CONTINUE IF NO CONDITIONS BELOW MET
+      # if f"{fname}_aligned" in ignore_fls:
+      #   continue
       if expr not in self.allowed_labels:
         continue
       if self.cnt_dict[label] >= int(self.cfg.DATASET.COUNT):

@@ -88,14 +88,16 @@ def calc_likelihood(cfg, z, mu, log_sd, device, n_pixel):
   
   return log_p_all/ (log(2) * n_pixel)
 
-def validate(cfg, loader, n_bins, device, mode):
+def validate(cfg, loader, n_bins, device):
   y_val_pred = []
   y_val_pred_vec = []
   y_val_true = []
   total_loss = []
   fname_all = []
   log_p = []
+  incorrect_preds = {}
 
+  label_dict = {0: "Surprise", 1: "Fear", 2: "Disgust", 3: "Happiness", 4: "Sadness", 5: "Anger", 6: "Neutral"}
   n_pixel = cfg.FLOW.IN_FEAT
   dist_path = f"./data/distributions/{args.config}"
   mu = torch.load(os.path.join(dist_path, "mu.pt"))
@@ -110,69 +112,59 @@ def validate(cfg, loader, n_bins, device, mode):
 
     features, *_  = model(image)
     log_probs = F.softmax(calc_likelihood(cfg, features, mu, log_sd, device, n_pixel), dim=-1)
-    log_p += log_probs.cpu().tolist()
+    pred = torch.argmax(log_probs, dim=1)
+
+    # equate = torch.eq(pred, exp)
+    false_ind = torch.where(pred != exp)[0]
+    false_probs_batch = torch.index_select(log_probs, 0, false_ind)
     
-    if not cfg.TESTING.RANK2:
-      pred = torch.argmax(log_probs, dim=1)
-    else:
-      probs, pred = torch.topk(log_probs, k=2, dim=-1)
-      pred = pred.T
-      target_reshaped = exp.view(1, -1).expand_as(pred)
-      pred = torch.where((pred == target_reshaped).any(dim=0), target_reshaped, pred)[0]
+    false_exp_batch = torch.index_select(exp, 0, false_ind)
+    false_fname_batch = [fname[i.item()] for i in false_ind]
+    false_probs, false_preds = torch.max(false_probs_batch, dim=-1)
 
-      # rank2_ind = torch.where((pred == target_reshaped)[1, :])[0]
-      # rank2_probs = torch.index_select(probs[:, 1].cpu(), dim=0, index=rank2_ind.cpu())
-      # rank2_cls_ind = torch.index_select(exp, dim=0, index=rank2_ind)
+    for i in range(len(false_fname_batch)):
+      fn = false_fname_batch[i]
+      likelihood = false_probs[i].item()
+      false_pred = label_dict[false_preds[i].item()]
+      true_pred = label_dict[false_exp_batch[i].item()]
+      if fn not in incorrect_preds:
+        incorrect_preds[fn] = {'likelihood': likelihood, "pred": false_pred, "true": true_pred}
 
-      # for ind, prob in zip(rank2_cls_ind, rank2_probs):
-      #   rank2_dict[ind.cpu().item()].append(prob.cpu().item())
+  with open(f'./data/val_ll.json', 'w') as fp:
+    json.dump(incorrect_preds, fp, indent=4)
+  return True
 
-    y_val_pred += pred.cpu().tolist()
-    y_val_true += list(exp.cpu())
-
-  save_json(args, fname_all, y_val_true, y_val_pred, log_p, mode)
-  val_acc, _, val_conf = get_metrics(y_val_true, y_val_pred)
-  class_wise_acc = val_conf.diagonal()/val_conf.sum(axis=1)
-
-  # for key, item in rank2_dict.items():
-  #   if len(item) > 0:
-  #     avg_item = sum(item)/len(item)
-  #     ic(key, avg_item)
-  # print("-"*40)
-  return val_acc, val_conf, class_wise_acc
-
-
-def save_json(args, fname_all, y_val_true, y_val_pred, log_p_soft, mode):
+def save_json(args, fname_all, y_val_true, y_val_pred, log_p):
   inv_exp_dict3 = {0: "Surprise", 1: "Fear", 2: "Disgust", 3: "Happiness", 4: "Sadness", 5: "Anger", 6: "Neutral"}
   metadata_dict = {"correct": {}, "incorrect": {}}
 
-  # log_p_soft = F.softmax(log_p, dim=1)
+  log_p_soft = F.softmax(log_p, dim=1)
 
   for k in range(len(fname_all)):
     fname = fname_all[k]
-    if y_val_pred[k] == y_val_true[k]:
+    if torch.argmax(y_val_pred[k]).item() == y_val_true[k].item():
       metadata_dict["correct"][fname] = {}
       metadata_dict["correct"][fname]["exp"] = inv_exp_dict3[y_val_true[k].item()]
       metadata_dict["correct"][fname]["class"] = str(y_val_true[k].item())
 
-      metadata_dict["correct"][fname]["y_prob"] = json.dumps(str(np.round(y_val_pred[k], 4)))
-      metadata_dict["correct"][fname]["likelihood"] = json.dumps(str(np.round(log_p_soft[k], 4)))
+      metadata_dict["correct"][fname]["y_prob"] = json.dumps(str(list(np.round(y_val_pred[k].cpu().numpy(), 4))))
+      metadata_dict["correct"][fname]["likelihood"] = json.dumps(str(list(np.round(log_p_soft[k].cpu().numpy(), 4))))
       # metadata_dict[fname]["accurate"] = "Yes" if torch.argmax(y_val_pred[k]).item() == y_val_true[k].item() else "No"
 
-      metadata_dict["correct"][fname]["predicted"] = inv_exp_dict3[y_val_pred[k]]
+      metadata_dict["correct"][fname]["predicted"] = inv_exp_dict3[torch.argmax(y_val_pred[k]).item()]
     else:
       metadata_dict["incorrect"][fname] = {}
       metadata_dict["incorrect"][fname]["exp"] = inv_exp_dict3[y_val_true[k].item()]
       metadata_dict["incorrect"][fname]["class"] = str(y_val_true[k].item())
 
-      metadata_dict["incorrect"][fname]["y_prob"] = json.dumps(str(np.round(y_val_pred[k], 4)))
-      metadata_dict["incorrect"][fname]["likelihood"] = json.dumps(str(np.round(log_p_soft[k], 4)))
+      metadata_dict["incorrect"][fname]["y_prob"] = json.dumps(str(list(np.round(y_val_pred[k].cpu().numpy(), 4))))
+      metadata_dict["incorrect"][fname]["likelihood"] = json.dumps(str(list(np.round(log_p_soft[k].cpu().numpy(), 4))))
       # metadata_dict[fname]["accurate"] = "Yes" if torch.argmax(y_val_pred[k]).item() == y_val_true[k].item() else "No"
 
-      metadata_dict["incorrect"][fname]["predicted"] = inv_exp_dict3[y_val_pred[k]]
+      metadata_dict["incorrect"][fname]["predicted"] = inv_exp_dict3[torch.argmax(y_val_pred[k]).item()]
 
 
-  with open(f'./data/{mode}_ll.json', 'w') as fp:
+  with open(f'./data/ll.json', 'w') as fp:
   # with open(f'./data/{args.config}.json', 'w') as fp:
     json.dump(metadata_dict, fp, indent=4)
   
@@ -212,8 +204,9 @@ if __name__ == "__main__":
   train_loader, val_loader = prepare_dataset(cfg, True)
 
   with torch.no_grad():
-    res = validate(cfg, train_loader, n_bins, device, "train")
-    res2 = validate(cfg, val_loader, n_bins, device, "val")
+    # res = validate(cfg, train_loader, n_bins, device)
+    res2 = validate(cfg, val_loader, n_bins, device)
+    e()
     ic(res)
     ic(res2)
       

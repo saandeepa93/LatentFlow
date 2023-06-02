@@ -32,6 +32,21 @@ from configs import get_cfg_defaults
 from utils import seed_everything, get_args, get_metrics
 from loaders import CustomDataset, AffectDataset, RafDb
 
+class LinearClassifier(nn.Module):
+  def __init__(self, cfg):
+    super().__init__()
+    self.linear = nn.Linear(cfg.FLOW.IN_FEAT, 256)
+    self.relu = nn.ReLU()
+    self.drop = nn.Dropout(0.3)
+    self.linear2 = nn.Linear(256, cfg.DATASET.N_CLASS)
+    
+  def forward(self, x):
+    x = self.linear(x)
+    x = self.drop(x)
+    x = self.relu(x)
+    x = self.linear2(x)
+    return F.softmax(x, dim=-1)
+
 def prepare_dataset(cfg, load_train = False):
   train_loader = None
   # PREPARE LOADER
@@ -96,36 +111,23 @@ def validate(cfg, loader, n_bins, device, mode):
   fname_all = []
   log_p = []
 
-  n_pixel = cfg.FLOW.IN_FEAT
-  dist_path = f"./data/distributions/{args.config}"
-  mu = torch.load(os.path.join(dist_path, "mu.pt"))
-  log_sd = torch.load(os.path.join(dist_path, "log_sd.pt"))
-
-  rank2_dict = {0: [], 1:[], 2:[], 3:[], 4:[], 5:[], 6:[]}
-
   for b, (image, exp, fname) in enumerate(loader,0):
     image = image.to(device)
     exp = exp.type(torch.int64).to(device)
     fname_all += list(fname)
 
     features, *_  = model(image)
-    log_probs = F.softmax(calc_likelihood(cfg, features, mu, log_sd, device, n_pixel), dim=-1)
-    log_p += log_probs.cpu().tolist()
-    
+    out = classifier(features)
+    log_p += out.cpu().tolist()
+
     if not cfg.TESTING.RANK2:
-      pred = torch.argmax(log_probs, dim=1)
+      pred = torch.argmax(out, dim=1)
     else:
-      probs, pred = torch.topk(log_probs, k=2, dim=-1)
+      probs, pred = torch.topk(out, k=2, dim=-1)
       pred = pred.T
       target_reshaped = exp.view(1, -1).expand_as(pred)
       pred = torch.where((pred == target_reshaped).any(dim=0), target_reshaped, pred)[0]
 
-      # rank2_ind = torch.where((pred == target_reshaped)[1, :])[0]
-      # rank2_probs = torch.index_select(probs[:, 1].cpu(), dim=0, index=rank2_ind.cpu())
-      # rank2_cls_ind = torch.index_select(exp, dim=0, index=rank2_ind)
-
-      # for ind, prob in zip(rank2_cls_ind, rank2_probs):
-      #   rank2_dict[ind.cpu().item()].append(prob.cpu().item())
 
     y_val_pred += pred.cpu().tolist()
     y_val_true += list(exp.cpu())
@@ -133,12 +135,6 @@ def validate(cfg, loader, n_bins, device, mode):
   save_json(args, fname_all, y_val_true, y_val_pred, log_p, mode)
   val_acc, _, val_conf = get_metrics(y_val_true, y_val_pred)
   class_wise_acc = val_conf.diagonal()/val_conf.sum(axis=1)
-
-  # for key, item in rank2_dict.items():
-  #   if len(item) > 0:
-  #     avg_item = sum(item)/len(item)
-  #     ic(key, avg_item)
-  # print("-"*40)
   return val_acc, val_conf, class_wise_acc
 
 
@@ -172,7 +168,7 @@ def save_json(args, fname_all, y_val_true, y_val_pred, log_p_soft, mode):
       metadata_dict["incorrect"][fname]["predicted"] = inv_exp_dict3[y_val_pred[k]]
 
 
-  with open(f'./data/{mode}_ll.json', 'w') as fp:
+  with open(f'./data/{mode}_ll_linear.json', 'w') as fp:
   # with open(f'./data/{args.config}.json', 'w') as fp:
     json.dump(metadata_dict, fp, indent=4)
   
@@ -206,7 +202,13 @@ if __name__ == "__main__":
   checkpoint = torch.load(f"./checkpoints/{args.config}_model_final.pt", map_location=device)
   model.load_state_dict(checkpoint)
   model.eval()
-  print("Total Trainable Parameters: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
+
+  classifier = LinearClassifier(cfg)
+  classifier_ckp = torch.load(f"./checkpoints/{args.config}_model_final_linear.pt", map_location=device)
+  classifier = classifier.to(device)
+  classifier.load_state_dict(classifier_ckp)
+  classifier.eval()
+
 
   # PREPARE LOADER
   train_loader, val_loader = prepare_dataset(cfg, True)

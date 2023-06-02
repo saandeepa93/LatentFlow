@@ -45,6 +45,6 @@ LR:
 
 
 COMMENTS:
-  New = same as 14 increased MLP DIM
+  New = same as 13 increased num_coupling layer and removed inner_seq
   # Before= same as config 89
   

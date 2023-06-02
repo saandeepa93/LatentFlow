@@ -104,13 +104,6 @@ def save_flow_embedding(cfg, args, loader, model, mode, device):
           cls_indices = (all_label == cls).nonzero().squeeze()
           mu_k.append(torch.index_select(torch.cat(mu_dict, dim=0), 0, cls_indices).mean(0))
           std_k.append(torch.index_select(torch.cat(std_dict, dim=0), 0, cls_indices).mean(0))
-
-
-        # # STACK INTO NEW DIM
-        # means, log_sds = [], []
-        # for blk in range(cfg.FLOW.N_BLOCK):
-        #   means.append(torch.stack(mu_k[blk]))
-        #   log_sds.append(torch.stack(std_k[blk]))
         
         dist_dir = os.path.join("./data/distributions", f"{args.config}")
         ut.mkdir(dist_dir)

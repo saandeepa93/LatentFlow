@@ -68,6 +68,7 @@ class AffectDataset(Dataset):
 
   def get_augmentation(self):
     train_transform_dict = {}
+    # trans_probs = [0.5, 1., 0.7, 0.2, 0.2, 0.7, 0.5, 0.7]
     trans_probs = [0.5, 1., 0.7, 0.2, 0.2, 0.7, 0.5, 0.7]
     for i in range(self.cfg.DATASET.N_CLASS):
       train_transform_dict[i] = A.Compose([

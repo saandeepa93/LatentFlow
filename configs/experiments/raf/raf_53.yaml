@@ -1,19 +1,19 @@
 PATHS:
-  DATA_ROOT: /data/dataset/AffectNet
-  VIS_PATH: ./data/sample/AFF
+  DATA_ROOT: /data/dataset/raf_db/basic
+  VIS_PATH: ./sample/plots/RAF
 
 FLOW:
-  N_FLOW: 1
-  N_BLOCK: 24
+  N_FLOW: 2
+  N_BLOCK: 3
   IN_FEAT: 1280
-  MLP_DIM: 256
+  MLP_DIM: 2048
   TEMP: 0.7
   N_SAMPLE: 20
   INIT_ZEROS: False
 
 DATASET:
-  DS_NAME: AFF
-  N_CLASS: 8
+  DS_NAME: RAF
+  N_CLASS: 7
   IMG_SIZE: 224
   NUM_WORKERS: 2
   TEST: M0008
@@ -24,26 +24,28 @@ DATASET:
   W_SAMPLER: True
 
 TRAINING:
-  ITER: 301
+  ITER: 1001
   BATCH: 256
   LR: 1e-4
-  WT_DECAY: 1e-5
+  WT_DECAY: 1e-2
   LMBD: 2.
-  DROPOUT: False
+  DROPOUT: True
   TEMP: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
   PRETRAINED: eff
 
 LR:
   WARM: True
-  ADJUST: False
+  ADJUST: True
   WARM_ITER: 50
   WARMUP_FROM: 1e-6
   DECAY_RATE: 0.1
   MIN_LR: 1e-6
   T_MAX: 100
 
+TESTING:
+  RANK2: False
 
 COMMENTS:
-  New = enet_b0_8_best_vgaf. no Random Cropping. Perspective used instead. 0.5 for all augment probs
+  New = enet_b0_8_best_vgaf. no Random Cropping. Perspective used instead. add 2.0 lmbda for nll
   # Before= same as config 89
   

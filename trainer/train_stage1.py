@@ -107,9 +107,6 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
   robust = False
   model.train()
   for b, (image, exp, _) in enumerate(loader,0):
-    # ic(Counter(exp.tolist()))
-    # with torch.no_grad():
-    #   plot_loader_imgs(image, exp, cfg)
     image = image.to(device)
     exp = exp.to(device)
 
@@ -121,16 +118,19 @@ def train(loader, epoch, model, optimizer, criterion, cfg, n_bins, device):
 
     # LOSS
     nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
-    con_loss = criterion.conLoss(log_p_all, exp)
+    # con_loss = criterion.conLoss(log_p_all, exp)
+    con_loss = criterion.kl_div(means, log_sds, exp, log_p_all)
     con_loss_mean = con_loss.mean()
 
     # loss = con_loss_mean + (cfg.TRAINING.LMBD * nll_loss)
     pre1 = torch.exp(-log_vars[0])
     pre2 = torch.exp(-log_vars[1])
     loss = ((pre1) * con_loss_mean) + ((pre2) * nll_loss) + (log_vars[0] + log_vars[1])
+    # loss = nll_loss + con_loss_mean
 
     with torch.no_grad():
       avg_con_loss += con_loss.tolist()
+      # avg_con_loss.append(con_loss_mean.item())
       avg_nll_loss.append(nll_loss.item())
 
     optimizer.zero_grad()
@@ -156,10 +156,12 @@ def validate(loader, model, criterion, cfg, n_bins, device):
     z, means, log_sds, sldj, log_vars = model(image)
 
     nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
-    con_loss = criterion.conLoss(log_p_all, exp)
+    # con_loss = criterion.conLoss(log_p_all, exp)
+    con_loss = criterion.kl_div(means, log_sds, exp)
     con_loss_mean = con_loss.mean()
 
     total_con_loss += con_loss.tolist()
+    # total_con_loss.append(con_loss_mean.item())
     total_nll_loss.append(nll_loss.item())
 
   avg_con_loss = sum(total_con_loss)/len(total_con_loss)
@@ -214,9 +216,9 @@ if __name__ == "__main__":
     
     # ADJUST LR
     if cfg.LR.ADJUST:
-      scheduler.step()
-      # if i > 25:
-      #   scheduler.step()
+      # scheduler.step()
+      if i > cfg.LR.WARM_ITER:
+        scheduler.step()
         # adjust_learning_rate(cfg, optimizer, epoch)
 
     curr_lr = optimizer.param_groups[0]["lr"] 

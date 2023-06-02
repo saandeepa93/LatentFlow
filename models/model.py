@@ -1,5 +1,6 @@
 import torch 
 from torch import nn 
+from torch.nn import functional as F
 import torchvision.models as models
 from torch.utils import model_zoo
 
@@ -17,7 +18,7 @@ class LatentModel(nn.Module):
   def __init__(self, cfg):
     super().__init__()
 
-
+    self.cfg = cfg
     # BACKBONE
     if cfg.TRAINING.PRETRAINED == "eff":
       self.backbone = timm.create_model('tf_efficientnet_b0_ns', pretrained=False)
@@ -84,7 +85,7 @@ class LatentModel(nn.Module):
     self.backbone.eval()
 
     # FLOW MODEL
-    self.flow = RealNVPTabular(in_dim=cfg.FLOW.IN_FEAT, hidden_dim=cfg.FLOW.MLP_DIM, num_layers=cfg.FLOW.N_FLOW, \
+    self.flow = RealNVPTabular(cfg, in_dim=cfg.FLOW.IN_FEAT, hidden_dim=cfg.FLOW.MLP_DIM, num_layers=cfg.FLOW.N_FLOW, \
                     num_coupling_layers=cfg.FLOW.N_BLOCK, init_zeros=cfg.FLOW.INIT_ZEROS, dropout=cfg.TRAINING.DROPOUT)
     
     self.sigma1 = nn.Parameter(torch.zeros(1))
@@ -92,6 +93,7 @@ class LatentModel(nn.Module):
 
 
   def forward(self, x):
+    # x = x + torch.rand_like(x)
     x = self.backbone(x).squeeze()
     x, mean, log_sd, logdet = self.flow(x)
     return x, mean, log_sd, logdet, [self.sigma1,self.sigma2]

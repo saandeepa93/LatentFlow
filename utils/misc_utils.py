@@ -5,6 +5,7 @@ import cv2
 from umap import UMAP
 import pandas as pd
 import plotly.express as px
+import json 
 
 import random
 import torch
@@ -16,7 +17,10 @@ from sklearn.metrics import accuracy_score, f1_score, matthews_corrcoef, confusi
 from sys import exit as e
 from icecream import ic
 
-
+def load_json(fpath):
+  with open(fpath, 'r') as fp:
+    fl = json.load(fp)
+  return fl 
 
 inv_exp_dict = {
                   "AFF": {0: "Neutral", 1: "Happiness", 2: "Sadness", 3: "Surprise", 4: "Fear", 5: "Disgust", 6: "Anger", 7: "Contempt"},
@@ -28,10 +32,67 @@ def mkdir(path):
   if not os.path.isdir(path):
     os.mkdir(path)
 
+def plot_umap_incor(cfg, X_lst_un, y_lst, name, fname_all, dim, mode):
+  b = X_lst_un.size(0)
+  X_lst = UMAP(n_components=dim, random_state=0, init='random').fit_transform(X_lst_un.view(b, -1))
+  y_lst_label = [str(i) for i in y_lst.detach().numpy()]
+
+  json_fl = load_json(f"./data/{mode}_ll.json")
+  incorrect_files = list(set((json_fl['incorrect'].keys())))
+  correct_files = list(set((json_fl['correct'].keys())))
+  all_files = incorrect_files + correct_files
+  sizes = []
+  for fname in fname_all:
+    if fname in incorrect_files:
+      sizes.append(15)
+    else:
+      sizes.append(3)
+  size_df = pd.DataFrame(sizes, columns=["size"])
+
+
+  if dim == 3:
+    df = pd.DataFrame(X_lst, columns=["x", "y", "z"])
+  else:
+    df = pd.DataFrame(X_lst, columns=["x", "y"])
+  df_color = pd.DataFrame(y_lst_label, columns=["class"])
+  df_fname = pd.DataFrame(fname_all, columns=["fname"])
+  df = df.join(df_color)
+  df = df.join(df_fname)
+  df = df.join(size_df)
+  cls_list  = list(inv_exp_dict[cfg.DATASET.DS_NAME].values())
+  cls_lst_name = [cls_list[int(k)] for k in y_lst_label]
+  df_exp = pd.DataFrame(cls_lst_name, columns=["expr"])
+  df = df.join(df_exp)
+  
+  if dim == 3:
+    fig = px.scatter_3d(df, x='x', y='y', z='z',color='class', title=f"{name}", size="size", \
+      # hover_data=[df.fname])
+      category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr])
+  else:
+    fig = px.scatter(df, x='x', y='y',color='class', title=f"{name}", size="size", \
+      # hover_data=[df.fname])
+      category_orders={"class": list(inv_exp_dict[cfg.DATASET.DS_NAME].values())}, hover_data=[df.fname, df.expr])
+  
+  # fig.update_traces(marker=dict(size=6))
+  fig.update_traces(marker=dict(opacity=1.0))
+  fig.update_layout(legend=dict(
+    yanchor="top",
+    y=0.60,
+    xanchor="left",
+    x=0.70
+    ))
+  
+  dest_path = os.path.join("./data/umap/", name)
+  mkdir(dest_path)
+  # fig.update_traces(hovertemplate = 'fname=%{customdata[0]}<br>')
+  fig.write_html(os.path.join(dest_path, f"{dim}d_{mode}.html"))
+
+
 def plot_umap(cfg, X_lst_un, y_lst, name, fname_all, dim, mode):
   b = X_lst_un.size(0)
   X_lst = UMAP(n_components=dim, random_state=0, init='random').fit_transform(X_lst_un.view(b, -1))
   y_lst_label = [str(i) for i in y_lst.detach().numpy()]
+
 
   if dim == 3:
     df = pd.DataFrame(X_lst, columns=["x", "y", "z"])
