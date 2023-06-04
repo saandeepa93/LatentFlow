@@ -157,7 +157,7 @@ def validate(loader, model, criterion, cfg, n_bins, device):
 
     nll_loss, log_p, _, log_p_all = criterion.nllLoss(z, sldj, means, log_sds)
     # con_loss = criterion.conLoss(log_p_all, exp)
-    con_loss = criterion.kl_div(means, log_sds, exp)
+    con_loss = criterion.kl_div(means, log_sds, exp, log_p_all)
     con_loss_mean = con_loss.mean()
 
     total_con_loss += con_loss.tolist()

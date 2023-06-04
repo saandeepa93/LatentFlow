@@ -5,6 +5,9 @@ from torch.utils.data.dataloader import default_collate
 from torchvision import utils
 from PIL import Image
 
+from einops import rearrange, reduce, repeat
+
+from torch.nn import functional as F
 import os
 import random
 import numpy as np
@@ -23,6 +26,8 @@ from models import LatentModel
 from losses import FlowConLoss
 from configs import get_cfg_defaults
 from utils import seed_everything, get_args
+
+
 
 
 def gaussian_log_p(x, mean, log_sd):
@@ -68,9 +73,17 @@ def nllLoss(cfg, device, z, logdet, mu, log_sd):
   )
 
 
+def calc_likelihood(cfg, z, mu, log_sd, device, n_pixel):
+    z = rearrange(z, 'b d -> b 1 d')
+    log_p_batch = gaussian_log_p(z, mu, log_sd)
+    log_p_all = log_p_batch.sum(dim=(2))
+    return log_p_all/ (log(2) * n_pixel)
+
 def get_image_tensor(path):
   transforms = A.Compose([
       A.Resize(cfg.DATASET.IMG_SIZE, cfg.DATASET.IMG_SIZE, p=1),
+      A.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225]),
       ToTensorV2()
       ], 
       # keypoints_params = A.KeypointParams(format='xy'), 
@@ -109,6 +122,7 @@ if __name__ == "__main__":
   cfg.freeze()
   print(cfg)
 
+  n_pixel = cfg.FLOW.IN_FEAT
   model = LatentModel(cfg)
   model = model.to(device)
 
@@ -119,7 +133,7 @@ if __name__ == "__main__":
   # train_image = get_image_tensor("/data/dataset/BU3DFE/M0007/M0007_HA01AE_F2D.bmp")
   # train_image = get_image_tensor("/data/dataset/BU3DFE/F0030/F0030_FE01BL_F2D.bmp")
   
-  train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_10584_aligned.jpg")
+  train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_02089_aligned.jpg")
   train_image = train_image.to(device)
   # train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/train_08604_aligned.jpg")
   # train_image = get_image_tensor("/data/dataset/raf_db/basic/Image/aligned/test_0286_aligned.jpg")
@@ -129,9 +143,11 @@ if __name__ == "__main__":
   mu =  torch.stack(means, dim=0)
   log_sd =  torch.stack(log_sds, dim=0)
 
+  ic(train_image.size(), mu.size(), log_sd.size())
+
   train_ll = get_ll(train_image, mu, log_sd, model)
   print("-"*40)
-  ic(train_ll.exp())
+  ic(train_ll)
 
 
 

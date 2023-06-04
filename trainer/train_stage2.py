@@ -29,7 +29,7 @@ from models import LatentModel
 from utils import plot_umap, gaussian_log_p, gaussian_sample, get_args, seed_everything, get_metrics
 from configs import get_cfg_defaults
 from loaders import CustomDataset, AffectDataset, RafDb
-from losses import FlowConLoss
+from losses import FlowConLoss, FocalLoss
 from trainer.robust_optimization import RobustOptimizer
 
 
@@ -139,9 +139,9 @@ def train(loader, epoch, model, classifier, optimizer, criterion, cfg, device, s
   avg_loss = []
   y_pred = []
   y_true = []
-  model.eval()
+  model.train()
   classifier.train()
-  for b, (image, exp, _) in enumerate(loader,0):
+  for b, (image, exp, fname) in enumerate(loader,0):
     if cfg.DATASET.AUG2:
       image = torch.cat(image, dim=0)
       exp = exp.repeat(2)
@@ -159,7 +159,8 @@ def train(loader, epoch, model, classifier, optimizer, criterion, cfg, device, s
       z, *_ = model(image)
     out = classifier(z)
 
-    loss = criterion(out, exp, sample_weight)
+    # loss = criterion(out, exp, sample_weight)
+    loss = criterion(out, exp, z)
 
     optimizer.zero_grad()
     loss.backward()
@@ -178,7 +179,7 @@ def validate(loader, model, classifier, criterion, device, sample_weight):
   y_pred = []
   y_true = []
   model.eval()
-  classifier.eval()
+  # classifier.eval()
   for b, (image, exp, _) in enumerate(loader,0):
       
     image = image.to(device)
@@ -187,7 +188,8 @@ def validate(loader, model, classifier, criterion, device, sample_weight):
     # FORWARD 
     z, *_ = model(image)
     out = classifier(z)
-    loss = criterion(out, exp, sample_weight)
+    # loss = criterion(out, exp, sample_weight)
+    loss = criterion(out, exp, z)
 
     total_loss.append(loss.item())
     y_pred += torch.argmax(out, dim=-1).cpu().tolist()
@@ -216,6 +218,7 @@ if __name__ == "__main__":
   cfg.DATASET.W_SAMPLER = False
   cfg.TRAINING.LR = 1e-3
   cfg.TRAINING.ITER = 101
+  cfg.TRAINING.BATCH = 128
   # cfg.LR.ADJUST = True
   # cfg.LR.WARM = False
   cfg.freeze()
@@ -223,15 +226,13 @@ if __name__ == "__main__":
   
 
   model = LatentModel(cfg)
-  model = model.to(device)
   checkpoint = torch.load(f"./checkpoints/{args.config}_model_final.pt", map_location=device)
   model.load_state_dict(checkpoint)
-
+  model = model.to(device)
+  
   classifier = LinearClassifier(cfg)
   classifier = classifier.to(device)
   print("number of params: ", sum(p.numel() for p in classifier.parameters() if p.requires_grad))
-
-    # optimizer
 
   # PREPARE LOADER
   train_loader, val_loader, loss_weights = prepare_dataset(cfg)
@@ -239,11 +240,11 @@ if __name__ == "__main__":
   
   # PREPARE OPTIMIZER
   optimizer = optim.AdamW(classifier.parameters(), lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY)
-  # optimizer = RobustOptimizer(filter(lambda p: p.requires_grad, classifier.parameters()), optim.Adam, lr=cfg.TRAINING.LR, weight_decay=cfg.TRAINING.WT_DECAY)
   scheduler = CosineAnnealingLR(optimizer, cfg.LR.T_MAX, cfg.LR.MIN_LR)
 
   # criterion = nn.CrossEntropyLoss()
-  criterion = cross_entropy_with_label_smoothing
+  criterion = FocalLoss(cfg, args)
+  # criterion = cross_entropy_with_label_smoothing
 
   # START TRAINING
   min_loss = 1e5
@@ -271,7 +272,7 @@ if __name__ == "__main__":
       min_loss = val_loss
       best_acc = val_acc
       ic(val_conf)
-      torch.save(classifier.state_dict(), f"checkpoints/{args.config}_model_final_linear.pt")
+      # torch.save(classifier.state_dict(), f"checkpoints/{args.config}_model_final_linear.pt")
 
     # SAVE MODEL EVERY k EPOCHS
     # if i % 200 == 0:

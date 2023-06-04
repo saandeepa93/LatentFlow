@@ -324,6 +324,9 @@ class CouplingLayerTabular(CouplingLayerBase):
         res = []
         for _ in range(num_layers):
             res.append(nn.Linear(mid_dim, mid_dim))
+            # UPDATE
+            # res.append(nn.Dropout(.5))
+            # UPDATE
             res.append(nn.SiLU())
         return res
 

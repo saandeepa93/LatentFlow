@@ -65,13 +65,15 @@ class RafDb(Dataset):
     for i in range(self.cfg.DATASET.N_CLASS):
       train_transform_dict[self.allowed_labels[i]] = A.Compose([
         A.Resize(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, p=1),
-        A.HorizontalFlip(p=trans_probs[i]),
-        A.GaussianBlur(p=trans_probs[i]),
+        # A.HorizontalFlip(p=trans_probs[i]),
+        # A.GaussianBlur(p=trans_probs[i]),
+
         # A.RandomResizedCrop(self.cfg.DATASET.IMG_SIZE, self.cfg.DATASET.IMG_SIZE, scale=(0.5, 1.), p=trans_probs[i]),
         #UPDATED
         # A.ZoomBlur(p=trans_probs[i]),
-        A.Perspective(p=trans_probs[i]),
-        A.Rotate(p=trans_probs[i]),
+        
+        # A.Perspective(p=trans_probs[i]),
+        # A.Rotate(p=trans_probs[i]),
         A.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225]),
         ToTensorV2()

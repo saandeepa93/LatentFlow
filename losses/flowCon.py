@@ -101,7 +101,6 @@ class FlowConLoss:
     pairwise_exp = torch.div(torch.exp(
       pairwise - torch.max(pairwise, dim=1, keepdim=True)[0]) + 1e-5, self.tau)
 
-    return pairwise_exp
     # kl_vector = self.kl_div(mu, log_sd, labels)
     # pairwise_exp += kl_vector
 
@@ -140,7 +139,7 @@ class FlowConLoss:
 
     # Negative sign to minimize loss KL by maximizing reverse KL divergence
     kl_vector = -self.kl_div_vectorized(loc, log_scale.exp()).mean(-1).T
-
+    # REGULARIZER
     # regularizer = self.conLoss(log_p_all, labels)
     # kl_vector += regularizer
 

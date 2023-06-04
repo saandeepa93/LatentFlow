@@ -94,7 +94,7 @@ class LatentModel(nn.Module):
 
   def forward(self, x):
     # x = x + torch.rand_like(x)
-    x = self.backbone(x).squeeze()
+    x = self.backbone(x)
     x, mean, log_sd, logdet = self.flow(x)
     return x, mean, log_sd, logdet, [self.sigma1,self.sigma2]
     # return x, mean, log_sd, logdet
